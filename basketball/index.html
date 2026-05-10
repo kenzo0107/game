@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Basketball Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    #game-container {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: white;
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 18px;
+      z-index: 100;
+    }
+
+    #scoreboard {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: white;
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 18px;
+      z-index: 100;
+      min-width: 200px;
+    }
+
+    #controls-info {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 100;
+    }
+
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 5px 0;
+    }
+
+    .team-name {
+      font-weight: bold;
+    }
+
+    .controls-section {
+      margin-bottom: 10px;
+    }
+
+    .controls-section h3 {
+      margin-bottom: 5px;
+      font-size: 16px;
+    }
+
+    .control-item {
+      margin: 3px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <div id="hud">
+    <div>残り時間: <span id="timer">5:00</span></div>
+    <div>状態: <span id="game-status">準備中</span></div>
+  </div>
+
+  <div id="scoreboard">
+    <div class="score-row">
+      <span class="team-name">チーム A:</span>
+      <span id="team-a-score">0</span>
+    </div>
+    <div class="score-row">
+      <span class="team-name">チーム B:</span>
+      <span id="team-b-score">0</span>
+    </div>
+  </div>
+
+  <div id="controls-info">
+    <div class="controls-section">
+      <h3>操作方法</h3>
+      <div class="control-item">W/A/S/D: 移動</div>
+      <div class="control-item">Space: ジャンプ</div>
+      <div class="control-item">E: シュート</div>
+      <div class="control-item">Shift: ダッシュ</div>
+    </div>
+    <div class="controls-section">
+      <div class="control-item">マウス: カメラ回転</div>
+      <div class="control-item">ホイール: ズーム</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
