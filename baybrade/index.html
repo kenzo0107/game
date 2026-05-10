@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ベイブレードバトル</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      overflow: hidden;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #info-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 10px;
+      pointer-events: auto;
+    }
+
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    #camera-controls {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      pointer-events: auto;
+    }
+
+    #camera-controls button {
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+
+    #slow-motion-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      font-weight: bold;
+      color: #ffff00;
+      text-shadow: 0 0 20px rgba(255, 255, 0, 0.8);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    #slow-motion-indicator.active {
+      opacity: 1;
+    }
+
+    #camera-controls {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    #camera-controls button {
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+
+    #camera-controls button.active {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    }
+
+    #slow-motion-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      font-weight: bold;
+      color: rgba(255, 255, 255, 0.8);
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+      display: none;
+      pointer-events: none;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #beyblade-selector {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 10px;
+      pointer-events: auto;
+    }
+
+    .beyblade-option {
+      margin: 10px 0;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .beyblade-option:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .beyblade-option.selected {
+      background: rgba(102, 126, 234, 0.5);
+      border: 2px solid #667eea;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    .stats {
+      font-size: 14px;
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="ui-overlay">
+    <div id="info-panel">
+      <h2>ベイブレードバトル</h2>
+      <div class="stats">Player 1 HP: <span id="p1-hp">100</span></div>
+      <div class="stats">Player 2 HP: <span id="p2-hp">100</span></div>
+      <div class="stats">RPM: <span id="rpm">0</span></div>
+    </div>
+
+    <div id="beyblade-selector">
+      <h2>ベイブレード選択</h2>
+      <div class="beyblade-option selected" data-type="attack">
+        <strong>アタックタイプ</strong><br>
+        攻撃: ★★★★☆ 防御: ★★☆☆☆ 持久: ★★☆☆☆
+      </div>
+      <div class="beyblade-option" data-type="defense">
+        <strong>ディフェンスタイプ</strong><br>
+        攻撃: ★★☆☆☆ 防御: ★★★★★ 持久: ★★★☆☆
+      </div>
+      <div class="beyblade-option" data-type="stamina">
+        <strong>スタミナタイプ</strong><br>
+        攻撃: ★★☆☆☆ 防御: ★★★☆☆ 持久: ★★★★★
+      </div>
+      <div class="beyblade-option" data-type="balance">
+        <strong>バランスタイプ</strong><br>
+        攻撃: ★★★☆☆ 防御: ★★★☆☆ 持久: ★★★☆☆
+      </div>
+    </div>
+
+    <div id="camera-controls">
+      <button id="camera-free">フリー</button>
+      <button id="camera-follow">追跡</button>
+      <button id="camera-top">真上</button>
+      <button id="camera-side">横</button>
+      <button id="camera-close">接近</button>
+    </div>
+
+    <div id="controls">
+      <button id="start-button">バトル開始</button>
+      <button id="reset-button">リセット</button>
+    </div>
+
+    <div id="slow-motion-indicator">SLOW MOTION</div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
