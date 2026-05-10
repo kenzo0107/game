@@ -1,0 +1,117 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.game-container {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    max-width: 900px;
+    width: 100%;
+}
+
+.game-title {
+    text-align: center;
+    font-size: 36px;
+    font-weight: bold;
+    color: #667eea;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+}
+
+.score, .lives, .high-score {
+    padding: 10px 20px;
+    background: #f0f0f0;
+    border-radius: 8px;
+}
+
+#gameCanvas {
+    display: block;
+    width: 100%;
+    border: 3px solid #333;
+    border-radius: 10px;
+    background: #87CEEB;
+}
+
+.controls {
+    margin-top: 15px;
+    text-align: center;
+}
+
+.instruction {
+    font-size: 16px;
+    margin-bottom: 10px;
+    color: #666;
+}
+
+button {
+    padding: 12px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #667eea;
+    color: white;
+    transition: all 0.3s;
+    margin: 0 5px;
+}
+
+button:hover {
+    background: #764ba2;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.timer-gauge-container {
+    width: 150px;
+    height: 20px;
+    background: #ddd;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid #999;
+}
+
+.timer-gauge {
+    height: 100%;
+    background: linear-gradient(90deg, #FFD700 0%, #FFA500 100%);
+    transition: width 0.1s linear;
+    width: 100%;
+}
+
+.shield-status, .star-status, .double-jump-status {
+    padding: 10px 20px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+}
+

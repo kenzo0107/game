@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ジャンプランナー</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="game-title">ジャンプランナー</h1>
+        <div class="header">
+            <div class="score">スコア: <span id="score">0</span></div>
+            <div class="high-score">ハイスコア: <span id="highScore">0</span></div>
+            <div class="double-jump-status" id="doubleJumpStatus" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="color: #FFD700;">✨ 二段ジャンプ</span>
+                    <div class="timer-gauge-container">
+                        <div class="timer-gauge" id="doubleJumpGauge"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="shield-status" id="shieldStatus" style="display: none;">
+                <span style="color: #00BFFF;">🛡️ シールド</span>
+            </div>
+            <div class="star-status" id="starStatus" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="color: #FFD700;">⭐ スターパワー</span>
+                    <div class="timer-gauge-container">
+                        <div class="timer-gauge" id="starGauge" style="background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div class="controls">
+            <div class="instruction">スペースキーでジャンプ！</div>
+            <button id="startBtn">ゲーム開始</button>
+            <button id="restartBtn" style="display: none;">リスタート</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
