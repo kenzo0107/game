@@ -1,0 +1,81 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  background-color: #87ceeb;
+}
+
+#game-container {
+  width: 100%;
+  height: 100%;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ヘルプオーバーレイ */
+.help-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+.help-content {
+  background-color: rgba(0, 0, 0, 0.9);
+  border: 2px solid #888;
+  border-radius: 10px;
+  padding: 30px;
+  max-width: 600px;
+  color: white;
+  font-family: 'Courier New', monospace;
+}
+
+.help-content h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 24px;
+  color: #4CAF50;
+}
+
+.help-section {
+  margin-bottom: 20px;
+}
+
+.help-section h3 {
+  margin-bottom: 10px;
+  font-size: 18px;
+  color: #FFC107;
+  border-bottom: 1px solid #555;
+  padding-bottom: 5px;
+}
+
+.help-section p {
+  margin: 5px 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.help-close {
+  text-align: center;
+  margin-top: 20px;
+  font-style: italic;
+  color: #aaa;
+}
