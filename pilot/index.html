@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pilot Wings Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      overflow: hidden;
+      font-family: 'Arial', sans-serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    #hud {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: #00ff00;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 16px;
+      font-family: 'Courier New', monospace;
+      min-width: 200px;
+    }
+    #hud span {
+      color: #ffff00;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="info">
+    <div style="font-weight: bold; margin-bottom: 5px;">操作方法:</div>
+    <div>W/S: 速度増減</div>
+    <div>↑/↓: ピッチ（上昇/下降）</div>
+    <div>←/→: ロール（左右旋回）</div>
+    <div>Q/E: ヨー（機首左右）</div>
+  </div>
+  <div id="hud">
+    <div style="font-weight: bold; margin-bottom: 5px;">飛行データ:</div>
+    <div>燃料: <span id="fuel">100</span>%</div>
+    <div>速度: <span id="speed">0</span></div>
+    <div>スロットル: <span id="throttle">0</span>%</div>
+    <div>ピッチ角: <span id="pitch">0</span>°</div>
+    <div>ロール角: <span id="roll">0</span>°</div>
+    <div>高度: <span id="altitude">0</span></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
