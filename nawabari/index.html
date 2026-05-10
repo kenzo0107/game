@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ナワバリバトル</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f7f7f7;
+            border-radius: 10px;
+        }
+
+        .score {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .player-score {
+            color: #3b82f6;
+        }
+
+        .cpu-score {
+            color: #ef4444;
+        }
+
+        .timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        canvas {
+            border: 4px solid #333;
+            border-radius: 10px;
+            display: block;
+            margin: 0 auto;
+            background: #e0e0e0;
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1em;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 0 10px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f9ff;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .instructions p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .game-over.show {
+            display: flex;
+        }
+
+        .game-over-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .game-over-content h2 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        .win {
+            color: #10b981;
+        }
+
+        .lose {
+            color: #ef4444;
+        }
+
+        .draw {
+            color: #f59e0b;
+        }
+
+        .special-gauge-container {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .special-gauge-label {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .special-gauge-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 3px solid #333;
+            position: relative;
+        }
+
+        .special-gauge-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #fbbf24, #f59e0b);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .special-gauge-fill.ready {
+            background: linear-gradient(90deg, #10b981, #059669);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .special-active {
+            background: rgba(251, 191, 36, 0.2);
+            animation: flash 0.5s infinite;
+        }
+
+        @keyframes flash {
+            0%, 100% { background: rgba(251, 191, 36, 0.2); }
+            50% { background: rgba(251, 191, 36, 0.4); }
+        }
+
+        .key-hint {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .key-hint.ready {
+            color: #10b981;
+            font-weight: bold;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🎮 ナワバリバトル</h1>
+
+        <div class="info-panel">
+            <div class="score player-score">
+                プレイヤー: <span id="playerScore">0</span>%
+            </div>
+            <div class="timer">
+                残り時間: <span id="timer">60</span>秒
+            </div>
+            <div class="score cpu-score">
+                コンピュータ: <span id="cpuScore">0</span>%
+            </div>
+        </div>
+
+        <div class="special-gauge-container">
+            <div class="special-gauge-label">⚡ 必殺技ゲージ</div>
+            <div class="special-gauge-bar">
+                <div class="special-gauge-fill" id="specialGauge">0%</div>
+            </div>
+            <div class="key-hint" id="specialHint">アイテムを集めてゲージを貯めよう！</div>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div class="controls">
+            <button id="startBtn">ゲーム開始</button>
+            <button id="resetBtn" disabled>リセット</button>
+        </div>
+
+        <div class="instructions">
+            <h3>操作方法</h3>
+            <p>
+                <strong>移動:</strong> WASDキー または 矢印キー<br>
+                <strong>必殺技:</strong> スペースキー（ゲージが100%の時）<br>
+                <br>
+                ⭐ アイテム（星）を取得すると必殺技ゲージが貯まります！<br>
+                ⚡ 必殺技発動中は塗れる範囲が2倍になります！<br>
+                60秒でコンピュータ（赤）より多くの陣地を塗りましょう！
+            </p>
+        </div>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <div class="game-over-content">
+            <h2 id="resultText"></h2>
+            <p id="resultDetail"></p>
+            <button id="playAgainBtn">もう一度プレイ</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
