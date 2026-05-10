@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サッカー PKゲーム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .score {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+        }
+
+        .score-item {
+            text-align: center;
+        }
+
+        .score-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .score-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .goal-area {
+            margin: 30px 0;
+            padding: 40px 20px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D98E 100%);
+            border-radius: 15px;
+            position: relative;
+            min-height: 200px;
+        }
+
+        .goal-posts {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            height: 150px;
+        }
+
+        .post {
+            width: 8px;
+            height: 150px;
+            background: white;
+            border: 2px solid #333;
+        }
+
+        .crossbar {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background: white;
+            border: 2px solid #333;
+        }
+
+        .keeper {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 3em;
+            transition: all 0.3s ease;
+        }
+
+        .keeper.dive-left {
+            left: 20%;
+        }
+
+        .keeper.dive-right {
+            left: 80%;
+        }
+
+        .ball {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2em;
+            transition: all 0.5s ease;
+        }
+
+        .ball.shoot-left {
+            left: 20%;
+            bottom: 80px;
+        }
+
+        .ball.shoot-center {
+            bottom: 80px;
+        }
+
+        .ball.shoot-right {
+            left: 80%;
+            bottom: 80px;
+        }
+
+        .direction-buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .direction-btn {
+            flex: 1;
+            padding: 15px;
+            font-size: 1.1em;
+            border: 3px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .direction-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .direction-btn.selected {
+            background: #667eea;
+            color: white;
+        }
+
+        .kick-btn {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.3em;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .kick-btn:hover:not(:disabled) {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .kick-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result {
+            text-align: center;
+            font-size: 1.5em;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-weight: bold;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .result.goal {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .result.save {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .result.win {
+            background: #d4edda;
+            color: #155724;
+            font-size: 2em;
+        }
+
+        .result.lose {
+            background: #f8d7da;
+            color: #721c24;
+            font-size: 2em;
+        }
+
+        .game-over {
+            text-align: center;
+            padding: 30px;
+            background: #fff3cd;
+            border-radius: 10px;
+            margin: 20px 0;
+            border: 3px solid #ffc107;
+        }
+
+        .game-over h2 {
+            margin-bottom: 15px;
+            color: #856404;
+        }
+
+        .new-game-btn {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.3em;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        .new-game-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .reset-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 1em;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .reset-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚽ PKゲーム</h1>
+
+        <div class="score">
+            <div class="score-item">
+                <div class="score-label">ゴール</div>
+                <div class="score-value" id="goals">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">セーブ</div>
+                <div class="score-value" id="saves">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">残り回数</div>
+                <div class="score-value" id="remaining">5</div>
+            </div>
+        </div>
+
+        <div class="goal-area">
+            <div class="crossbar"></div>
+            <div class="goal-posts">
+                <div class="post"></div>
+                <div class="post"></div>
+            </div>
+            <div class="keeper" id="keeper">🧍</div>
+            <div class="ball" id="ball">⚽</div>
+        </div>
+
+        <div class="direction-buttons">
+            <button class="direction-btn" data-direction="left">← 左</button>
+            <button class="direction-btn" data-direction="center">真ん中</button>
+            <button class="direction-btn" data-direction="right">右 →</button>
+        </div>
+
+        <button class="kick-btn" id="kickBtn" disabled>キック！</button>
+
+        <div class="result" id="result"></div>
+
+        <button class="reset-btn" id="resetBtn">新しいゲーム</button>
+    </div>
+
+    <script>
+        const MAX_ATTEMPTS = 5;
+        const WIN_THRESHOLD = 3;
+
+        let selectedDirection = null;
+        let goals = 0;
+        let saves = 0;
+        let attempts = 0;
+        let gameOver = false;
+
+        const directionButtons = document.querySelectorAll('.direction-btn');
+        const kickBtn = document.getElementById('kickBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const resultDiv = document.getElementById('result');
+        const keeper = document.getElementById('keeper');
+        const ball = document.getElementById('ball');
+
+        // 方向選択
+        directionButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (gameOver) return;
+
+                directionButtons.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                selectedDirection = btn.dataset.direction;
+                kickBtn.disabled = false;
+            });
+        });
+
+        // キック実行
+        kickBtn.addEventListener('click', () => {
+            if (!selectedDirection || gameOver) return;
+
+            kickBtn.disabled = true;
+            directionButtons.forEach(btn => btn.disabled = true);
+
+            // キーパーがランダムに飛ぶ
+            const directions = ['left', 'center', 'right'];
+            const keeperDirection = directions[Math.floor(Math.random() * directions.length)];
+
+            // アニメーション
+            keeper.classList.remove('dive-left', 'dive-right');
+            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
+
+            setTimeout(() => {
+                // キーパーの動き
+                if (keeperDirection === 'left') {
+                    keeper.classList.add('dive-left');
+                } else if (keeperDirection === 'right') {
+                    keeper.classList.add('dive-right');
+                }
+
+                // ボールの動き
+                ball.classList.add('shoot-' + selectedDirection);
+
+                // 結果判定
+                attempts++;
+                let isGoal = selectedDirection !== keeperDirection;
+
+                setTimeout(() => {
+                    if (isGoal) {
+                        goals++;
+                        resultDiv.textContent = '🎉 ゴール！';
+                        resultDiv.className = 'result goal';
+                    } else {
+                        saves++;
+                        resultDiv.textContent = '😭 セーブされた！';
+                        resultDiv.className = 'result save';
+                    }
+
+                    updateScore();
+
+                    // ゲーム終了判定
+                    if (attempts >= MAX_ATTEMPTS) {
+                        setTimeout(() => {
+                            endGame();
+                        }, 1500);
+                    } else {
+                        // 次のキックへ
+                        setTimeout(() => {
+                            resetKick();
+                        }, 2000);
+                    }
+                }, 500);
+            }, 100);
+        });
+
+        // キックのリセット（ゲーム継続）
+        function resetKick() {
+            keeper.classList.remove('dive-left', 'dive-right');
+            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
+            directionButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('selected');
+            });
+            selectedDirection = null;
+            kickBtn.disabled = true;
+            resultDiv.textContent = '';
+            resultDiv.className = 'result';
+        }
+
+        // ゲーム終了
+        function endGame() {
+            gameOver = true;
+            keeper.classList.remove('dive-left', 'dive-right');
+            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
+
+            directionButtons.forEach(btn => btn.disabled = true);
+            kickBtn.disabled = true;
+
+            const isWin = goals >= WIN_THRESHOLD;
+
+            if (isWin) {
+                resultDiv.textContent = `🏆 勝利！ ${goals}ゴール成功！`;
+                resultDiv.className = 'result win';
+            } else {
+                resultDiv.textContent = `😢 敗北... ${goals}ゴールでした`;
+                resultDiv.className = 'result lose';
+            }
+        }
+
+        // 新しいゲーム
+        resetBtn.addEventListener('click', () => {
+            goals = 0;
+            saves = 0;
+            attempts = 0;
+            gameOver = false;
+            selectedDirection = null;
+
+            keeper.classList.remove('dive-left', 'dive-right');
+            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
+
+            directionButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('selected');
+            });
+
+            kickBtn.disabled = true;
+            resultDiv.textContent = '';
+            resultDiv.className = 'result';
+
+            updateScore();
+        });
+
+        function updateScore() {
+            document.getElementById('goals').textContent = goals;
+            document.getElementById('saves').textContent = saves;
+            document.getElementById('remaining').textContent = MAX_ATTEMPTS - attempts;
+        }
+    </script>
+</body>
+</html>
