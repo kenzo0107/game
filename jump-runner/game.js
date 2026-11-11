@@ -10,6 +10,7 @@ let score = 0;
 let highScore = 0;
 let gameSpeed = 2; // 3から2に変更（難易度を下げる）
 let obstacleTimer = 0;
+let gameOverAt = 0;
 
 // ハイスコアの読み込み
 function loadHighScore() {
@@ -1781,7 +1782,10 @@ function checkStomp(player, enemy) {
 
 // ゲームループ
 function gameLoop() {
-    if (gameState !== 'playing') return;
+    if (gameState !== 'playing') {
+        drawOverlay('GAME OVER', '画面をタップしてリスタート');
+        return;
+    }
 
     // 背景クリア（空の色）
     ctx.fillStyle = '#87CEEB'; // 空色
@@ -1968,7 +1972,7 @@ function gameLoop() {
             updateHighScore();
             playDeathSound();
             stopMusic();
-            document.getElementById('restartBtn').style.display = 'inline-block';
+            gameOverAt = performance.now();
             updateUI();
         }
 
@@ -1990,7 +1994,7 @@ function gameLoop() {
         updateHighScore();
         playDeathSound();
         stopMusic();
-        document.getElementById('restartBtn').style.display = 'inline-block';
+        gameOverAt = performance.now();
         updateUI();
     }
 
@@ -2044,7 +2048,7 @@ function gameLoop() {
             updateHighScore();
             playDeathSound();
             stopMusic(); // 音楽停止
-            document.getElementById('restartBtn').style.display = 'inline-block';
+            gameOverAt = performance.now();
             updateUI();
         }
     }
@@ -2079,7 +2083,7 @@ function gameLoop() {
             updateHighScore();
             playDeathSound();
             stopMusic(); // 音楽停止
-            document.getElementById('restartBtn').style.display = 'inline-block';
+            gameOverAt = performance.now();
             updateUI();
         }
     }
@@ -2206,7 +2210,7 @@ function gameLoop() {
                     playDeathSound();
                     stopMusic();
                     boss = null;
-                    document.getElementById('restartBtn').style.display = 'inline-block';
+                    gameOverAt = performance.now();
                     updateUI();
                 }
             }
@@ -2216,33 +2220,58 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// キーボード入力
-document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && gameState === 'playing') {
-        e.preventDefault();
-        player.jump();
-    }
-});
+function drawOverlay(title, message) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 48px sans-serif';
+    ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 20);
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(message, canvas.width / 2, canvas.height / 2 + 30);
+    ctx.textAlign = 'left';
+}
 
-// ボタンイベント
-document.getElementById('startBtn').addEventListener('click', () => {
+function startGame() {
     init();
     gameState = 'playing';
-    document.getElementById('startBtn').style.display = 'none';
 
-    // 音楽開始
     initAudio();
     playStartSound();
     playMusic();
 
     gameLoop();
+}
+
+// ジャンプ連打中のタップでゲームオーバー直後に即リスタートしてしまわないよう、少し待つ
+const RESTART_DELAY_MS = 800;
+
+function handleTap() {
+    if (gameState === 'playing') {
+        player.jump();
+    } else if (gameState === 'ready') {
+        startGame();
+    } else if (performance.now() - gameOverAt >= RESTART_DELAY_MS) {
+        startGame();
+    }
+}
+
+document.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    handleTap();
 });
 
-document.getElementById('restartBtn').addEventListener('click', () => {
-    document.getElementById('restartBtn').style.display = 'none';
-    document.getElementById('startBtn').style.display = 'inline-block';
-    init();
+// タッチの pointerdown はブラウザによってユーザー操作と見なされず AudioContext が suspended のままになるため、pointerup で再開する
+document.addEventListener('pointerup', () => {
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
 });
 
-// 初期化
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) handleTap();
+    }
+});
+
 init();
+drawOverlay('ジャンプランナー', '画面をタップしてスタート');
