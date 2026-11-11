@@ -22,6 +22,8 @@ const STRIDE_PER_PX = 0.09; // 走りの1周期 ≒ 70px
 const FIGURE_HEIGHT = 74;
 // 足元より上にキャラを描くため、盤面上端にいても頭が切れないよう奥の壁として余白を取る
 const BACK_WALL = 80;
+// 横向きに走るとマフラーと影が足元から左右へはみ出すため、左右にも壁の余白を取る
+const SIDE_WALL = 24;
 const MAX_RENDER_SCALE = 1.5; // 高DPI端末で全画面合成を毎フレーム行っても重くならない上限
 
 // 色定義
@@ -146,21 +148,22 @@ class Game {
     private fitArena(): void {
         const field = document.querySelector('.field') as HTMLElement;
         const aspect = Math.max(0.5, Math.min(2, (field.clientWidth || 4) / (field.clientHeight || 3)));
-        const arenaHeight =
-            (-aspect * BACK_WALL + Math.sqrt((aspect * BACK_WALL) ** 2 + 4 * aspect * ARENA_AREA)) / (2 * aspect);
+        const b = aspect * BACK_WALL - 2 * SIDE_WALL;
+        const arenaHeight = (-b + Math.sqrt(b * b + 4 * aspect * ARENA_AREA)) / (2 * aspect);
         this.height = Math.round(arenaHeight / GRID_SIZE) * GRID_SIZE;
-        this.width = Math.round((aspect * (this.height + BACK_WALL)) / GRID_SIZE) * GRID_SIZE;
+        this.width = Math.round((aspect * (this.height + BACK_WALL) - 2 * SIDE_WALL) / GRID_SIZE) * GRID_SIZE;
         this.cols = this.width / GRID_SIZE;
         this.rows = this.height / GRID_SIZE;
-        const boardAspect = this.width / (this.height + BACK_WALL);
+        const boardWidth = this.width + SIDE_WALL * 2;
+        const boardAspect = boardWidth / (this.height + BACK_WALL);
         (document.querySelector('.board') as HTMLElement).style.setProperty('--aspect', `${boardAspect}`);
 
-        const cssWidth = Math.min(field.clientWidth, field.clientHeight * boardAspect) || this.width;
-        this.scale = Math.max(1, Math.min(MAX_RENDER_SCALE, (cssWidth * devicePixelRatio) / this.width));
-        this.canvas.width = Math.round(this.width * this.scale);
+        const cssWidth = Math.min(field.clientWidth, field.clientHeight * boardAspect) || boardWidth;
+        this.scale = Math.max(1, Math.min(MAX_RENDER_SCALE, (cssWidth * devicePixelRatio) / boardWidth));
+        this.canvas.width = Math.round(boardWidth * this.scale);
         this.canvas.height = Math.round((this.height + BACK_WALL) * this.scale);
         for (const layer of [this.ground, this.paintLayer, this.fxLayer]) {
-            layer.width = this.canvas.width;
+            layer.width = Math.round(this.width * this.scale);
             layer.height = Math.round(this.height * this.scale);
         }
         for (const ctx of [this.groundCtx, this.paintCtx]) {
@@ -609,7 +612,7 @@ class Game {
 
     private draw(): void {
         const ctx = this.ctx;
-        ctx.setTransform(this.scale, 0, 0, this.scale, 0, this.wallOffset());
+        ctx.setTransform(this.scale, 0, 0, this.scale, this.sideWallOffset(), this.wallOffset());
         this.drawBackWall();
         ctx.drawImage(this.ground, 0, 0, this.width, this.height);
         this.drawPaint();
@@ -658,7 +661,7 @@ class Game {
         };
 
         ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, this.wallOffset());
+        ctx.setTransform(1, 0, 0, 1, this.sideWallOffset(), this.wallOffset());
 
         silhouette('rgba(0, 0, 0, 0.22)', 0, 0);
         ctx.drawImage(this.fxLayer, offset, offset * 1.5);
@@ -679,21 +682,35 @@ class Game {
         return Math.round(BACK_WALL * this.scale);
     }
 
+    private sideWallOffset(): number {
+        return Math.round(SIDE_WALL * this.scale);
+    }
+
     private drawBackWall(): void {
         const ctx = this.ctx;
         const wall = ctx.createLinearGradient(0, -BACK_WALL, 0, 0);
         wall.addColorStop(0, '#1e293b');
         wall.addColorStop(1, '#475569');
         ctx.fillStyle = wall;
-        ctx.fillRect(0, -BACK_WALL, this.width, BACK_WALL);
+        ctx.fillRect(-SIDE_WALL, -BACK_WALL, this.width + SIDE_WALL * 2, BACK_WALL);
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
         for (let x = 0; x < this.width; x += 40) {
             ctx.fillRect(x, -BACK_WALL, 20, BACK_WALL);
         }
 
+        for (const [x, edge] of [[-SIDE_WALL, 0], [this.width, SIDE_WALL]]) {
+            const side = ctx.createLinearGradient(x, 0, x + SIDE_WALL, 0);
+            side.addColorStop(edge ? 1 : 0, '#1e293b');
+            side.addColorStop(edge ? 0 : 1, '#475569');
+            ctx.fillStyle = side;
+            ctx.fillRect(x, 0, SIDE_WALL, this.height);
+        }
+
         ctx.fillStyle = '#facc15';
-        ctx.fillRect(0, -6, this.width, 6);
+        ctx.fillRect(-6, -6, this.width + 12, 6);
+        ctx.fillRect(-6, 0, 6, this.height);
+        ctx.fillRect(this.width, 0, 6, this.height);
     }
 
     private drawShadow(fighter: Fighter): void {
@@ -967,39 +984,121 @@ class Game {
     }
 
     private drawItems(): void {
+        const t = Date.now() / 1000;
         for (const item of this.items) {
             if (!item.active) continue;
 
-            // 星形アイテムを描画
-            this.ctx.save();
-            this.ctx.translate(item.x + ITEM_SIZE / 2, item.y + ITEM_SIZE / 2);
-
-            // 回転アニメーション
-            const rotation = (Date.now() / 1000) * Math.PI;
-            this.ctx.rotate(rotation);
-
-            // 星の描画
-            this.ctx.fillStyle = '#fbbf24';
-            this.ctx.strokeStyle = '#f59e0b';
-            this.ctx.lineWidth = 2;
-
-            this.ctx.beginPath();
-            for (let i = 0; i < 5; i++) {
-                const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
-                const x = Math.cos(angle) * ITEM_SIZE / 2;
-                const y = Math.sin(angle) * ITEM_SIZE / 2;
-                if (i === 0) {
-                    this.ctx.moveTo(x, y);
-                } else {
-                    this.ctx.lineTo(x, y);
-                }
-            }
-            this.ctx.closePath();
-            this.ctx.fill();
-            this.ctx.stroke();
-
-            this.ctx.restore();
+            const cx = item.x + ITEM_SIZE / 2;
+            const cy = item.y + ITEM_SIZE / 2;
+            const seed = item.x * 0.37 + item.y * 0.11;
+            const hover = 18 + Math.sin(t * 3 + seed) * 5;
+            this.drawItemShadow(cx, cy, hover);
+            this.drawItemGlow(cx, cy - hover, t + seed);
+            this.drawSpinningStar(cx, cy - hover, t * 4 + seed);
+            this.drawSparkles(cx, cy - hover, t + seed);
         }
+    }
+
+    private drawItemShadow(cx: number, cy: number, hover: number): void {
+        const ctx = this.ctx;
+        const spread = 1 - (hover - 13) / 30;
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.18 + spread * 0.12})`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 13 * spread + 4, 4.5 * spread + 1.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    private drawItemGlow(cx: number, cy: number, t: number): void {
+        const ctx = this.ctx;
+        const radius = 30 + Math.sin(t * 5) * 4;
+        const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        glow.addColorStop(0, 'rgba(255, 236, 140, 0.75)');
+        glow.addColorStop(1, 'rgba(255, 200, 40, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    private starPath(ctx: CanvasRenderingContext2D, outer: number): void {
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+            const r = i % 2 === 0 ? outer : outer * 0.48;
+            const angle = (i * Math.PI) / 5 - Math.PI / 2;
+            if (i === 0) ctx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+            else ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+        }
+        ctx.closePath();
+    }
+
+    // canvas 2D には 3D 回転がないため、横幅を cos で縮めて縦軸回転に見せ、ずらした重ね描きで厚みを出す
+    private drawSpinningStar(cx: number, cy: number, spin: number): void {
+        const ctx = this.ctx;
+        const outer = 21;
+        const depth = 7;
+        const facing = Math.cos(spin);
+        const widthScale = Math.sign(facing || 1) * Math.max(0.08, Math.abs(facing));
+        const sideShift = Math.sin(spin);
+
+        ctx.save();
+        ctx.lineJoin = 'round';
+
+        for (let k = depth; k >= 1; k--) {
+            ctx.save();
+            ctx.translate(cx - sideShift * k, cy);
+            ctx.scale(widthScale, 1);
+            this.starPath(ctx, outer);
+            ctx.fillStyle = k === depth ? '#78350f' : '#b45309';
+            ctx.fill();
+            ctx.restore();
+        }
+
+        ctx.translate(cx, cy);
+        ctx.scale(widthScale, 1);
+        const face = ctx.createLinearGradient(-outer, -outer, outer, outer);
+        const light = 0.55 + 0.45 * Math.abs(facing);
+        face.addColorStop(0, `rgba(255, 250, 200, ${light})`);
+        face.addColorStop(0.45, '#fde047');
+        face.addColorStop(1, '#f59e0b');
+        this.starPath(ctx, outer);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fill();
+        ctx.fillStyle = face;
+        ctx.fill();
+        ctx.strokeStyle = '#92400e';
+        ctx.lineWidth = 2 / Math.max(0.3, Math.abs(widthScale));
+        ctx.stroke();
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * Math.abs(facing)})`;
+        ctx.beginPath();
+        ctx.ellipse(-outer * 0.22, -outer * 0.38, outer * 0.18, outer * 0.1, -0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    private drawSparkles(cx: number, cy: number, t: number): void {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.fillStyle = 'white';
+        for (let i = 0; i < 3; i++) {
+            const angle = t * 1.8 + (i * Math.PI * 2) / 3;
+            const size = Math.max(0, Math.sin(t * 6 + i * 2)) * 5;
+            if (size < 0.5) continue;
+            const x = cx + Math.cos(angle) * 26;
+            const y = cy + Math.sin(angle) * 16;
+            ctx.beginPath();
+            ctx.moveTo(x, y - size);
+            ctx.lineTo(x + size * 0.3, y - size * 0.3);
+            ctx.lineTo(x + size, y);
+            ctx.lineTo(x + size * 0.3, y + size * 0.3);
+            ctx.lineTo(x, y + size);
+            ctx.lineTo(x - size * 0.3, y + size * 0.3);
+            ctx.lineTo(x - size, y);
+            ctx.lineTo(x - size * 0.3, y - size * 0.3);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
     }
 
     private drawSpecialEffect(): void {
