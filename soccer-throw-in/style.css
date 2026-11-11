@@ -124,6 +124,13 @@ body {
     animation: pop 0.35s ease-out;
 }
 
+.result-detail {
+    margin-bottom: 4px;
+    font-size: 1rem;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+
 .result-best {
     font-size: 1.4rem;
     font-weight: bold;

@@ -5,6 +5,7 @@ const hintEl = document.getElementById('hint');
 const resultEl = document.getElementById('result');
 const resultDistanceEl = document.getElementById('resultDistance');
 const resultBestEl = document.getElementById('resultBest');
+const resultDetailEl = document.getElementById('resultDetail');
 const gaugeEl = document.getElementById('gauge');
 const powerBar = document.getElementById('powerBar');
 const powerValue = document.getElementById('powerValue');
@@ -28,6 +29,11 @@ const WINDUP_SECONDS = 0.25;
 const SWING_SECONDS = 0.22;
 const RELEASE_AT = 0.6;
 const BALL_RADIUS = 0.4;
+const BOUNCE_MIN_SPEED = 0.06;
+const RESTITUTION = 0.35;
+const BOUNCE_FRICTION = 0.55;
+const ROLL_DECAY = 0.97;
+const ROLL_DRAG = 0.002;
 const SHOULDER_Y = 2.1;
 const HAND_REACH = 1.45;
 const PLAYER_X = -35;
@@ -36,7 +42,7 @@ const ARM_REST = -1.2;
 const ARM_WINDUP = -Math.PI - 0.6;
 const ARM_FOLLOW = -1.1;
 
-let scene, camera, renderer, player, ball, aimArrow;
+let scene, camera, renderer, player, ball, aimArrow, landingMarker;
 const arms = [];
 const camLook = new THREE.Vector3();
 const camTargetPos = new THREE.Vector3();
@@ -49,6 +55,8 @@ let angle = 45;
 let windup = 0;
 let swing = 0;
 let velocity = null;
+let landingX = null;
+let rolling = false;
 let bestDistance = loadBest();
 let aim = null;
 
@@ -100,6 +108,7 @@ function init() {
     createPlayer();
     createBall();
     createAimArrow();
+    createLandingMarker();
     resetRound();
     snapCamera();
 
@@ -268,6 +277,17 @@ function createAimArrow() {
     scene.add(aimArrow);
 }
 
+function createLandingMarker() {
+    landingMarker = new THREE.Mesh(
+        new THREE.RingGeometry(0.5, 0.7, 24),
+        new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.85 })
+    );
+    landingMarker.rotation.x = -Math.PI / 2;
+    landingMarker.position.y = 0.03;
+    landingMarker.visible = false;
+    scene.add(landingMarker);
+}
+
 function setArms(armAngle) {
     for (const arm of arms) arm.rotation.x = armAngle;
     ball.position.set(
@@ -291,6 +311,9 @@ function resetRound() {
     windup = 0;
     swing = 0;
     velocity = null;
+    landingX = null;
+    rolling = false;
+    landingMarker.visible = false;
     ball.rotation.set(0, 0, 0);
     setArms(ARM_REST);
     aimArrow.visible = false;
@@ -411,25 +434,53 @@ function updateSwing(frames) {
         for (const arm of arms) arm.rotation.x = armAngle;
         updateBall(frames);
     }
-    if (swing >= 1 && velocity) state = STATE.FLYING;
+    if (swing >= 1 && velocity && state === STATE.SWINGING) state = STATE.FLYING;
 }
 
 function updateBall(frames) {
-    velocity.y -= GRAVITY * frames;
-    ball.position.addScaledVector(velocity, frames);
-    ball.rotation.z -= 0.15 * frames;
+    if (rolling) {
+        velocity.x = Math.max(0, velocity.x * Math.pow(ROLL_DECAY, frames) - ROLL_DRAG * frames);
+        ball.position.x += velocity.x * frames;
+        ball.rotation.z -= (velocity.x / BALL_RADIUS) * frames;
+    } else {
+        velocity.y -= GRAVITY * frames;
+        ball.position.addScaledVector(velocity, frames);
+        ball.rotation.z -= 0.15 * frames;
+        if (ball.position.y <= BALL_RADIUS) land();
+    }
+    distanceEl.textContent = currentDistance(ball.position.x);
+    if (rolling && velocity.x === 0) finish();
+}
 
-    if (ball.position.y > BALL_RADIUS) return;
+function land() {
     ball.position.y = BALL_RADIUS;
-    finish();
+    if (landingX === null) {
+        landingX = ball.position.x;
+        landingMarker.position.x = landingX;
+        landingMarker.visible = true;
+        vibrate(15);
+    }
+    if (-velocity.y > BOUNCE_MIN_SPEED) {
+        velocity.y = -velocity.y * RESTITUTION;
+        velocity.x *= BOUNCE_FRICTION;
+    } else {
+        velocity.y = 0;
+        rolling = true;
+    }
+}
+
+function currentDistance(x) {
+    return Math.max(0, Math.round(x - player.position.x));
 }
 
 function finish() {
     state = STATE.RESULT;
     gaugeEl.hidden = true;
-    const distance = Math.max(0, Math.round(ball.position.x - player.position.x));
+    const distance = currentDistance(ball.position.x);
+    const carry = currentDistance(landingX);
     distanceEl.textContent = distance;
     resultDistanceEl.textContent = `${distance}m`;
+    resultDetailEl.textContent = `着地 ${carry}m ＋ 転がり ${distance - carry}m`;
     const isBest = distance > bestDistance;
     resultBestEl.hidden = !isBest;
     if (isBest) {
