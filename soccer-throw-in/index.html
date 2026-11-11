@@ -2,35 +2,48 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>サッカー スローイン ゲーム 3D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#87ceeb">
+    <title>サッカー スローイン 3D</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <h1>⚽ サッカー スローイン ゲーム 3D</h1>
-        <div class="info-panel">
-            <div class="score">
-                <div>飛距離: <span id="distance">0</span>m</div>
-                <div>ベスト: <span id="best">0</span>m</div>
-            </div>
-            <div class="instructions">
-                クリックしてパワーを決定！
-            </div>
-        </div>
-        <div id="canvas-container">
-            <div id="powerGaugeUI" class="power-gauge-ui">
-                <div class="power-label">パワー: <span id="powerValue">0</span>%</div>
-                <div class="power-bar-container">
-                    <div id="powerBar" class="power-bar"></div>
-                </div>
-            </div>
-        </div>
-        <div class="controls">
-            <button id="startBtn">スタート</button>
-            <button id="resetBtn">リセット</button>
+    <div id="stage"></div>
+
+    <div class="hud">
+        <a class="back" href="../" aria-label="トップへ戻る">←</a>
+        <div class="score">
+            <div><span class="label">飛距離</span><span id="distance">0</span>m</div>
+            <div><span class="label">ベスト</span><span id="best">0</span>m</div>
         </div>
     </div>
+
+    <div id="hint" class="hint">
+        <div class="hint-title">⚽ スローイン</div>
+        <ol>
+            <li>画面を<b>長押し</b>で構える</li>
+            <li>押したまま<b>上下にスライド</b>で角度</li>
+            <li>ゲージを見て<b>指を離す</b>と投げる</li>
+        </ol>
+    </div>
+
+    <div id="result" class="result" hidden>
+        <div id="resultDistance" class="result-distance">0m</div>
+        <div id="resultBest" class="result-best" hidden>NEW BEST!</div>
+        <div class="result-retry">タップでもう一度</div>
+    </div>
+
+    <div id="gauge" class="gauge" hidden>
+        <div class="gauge-row">
+            <span>パワー <b id="powerValue">0</b>%</span>
+            <span>角度 <b id="angleValue">45</b>°</span>
+        </div>
+        <div class="power-bar-container">
+            <div id="powerBar" class="power-bar"></div>
+            <div class="power-sweet"></div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="game.js"></script>
 </body>

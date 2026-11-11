@@ -1,586 +1,497 @@
-// DOM要素
-const startBtn = document.getElementById('startBtn');
-const resetBtn = document.getElementById('resetBtn');
+const stage = document.getElementById('stage');
 const distanceEl = document.getElementById('distance');
 const bestEl = document.getElementById('best');
-const canvasContainer = document.getElementById('canvas-container');
-const powerGaugeUI = document.getElementById('powerGaugeUI');
+const hintEl = document.getElementById('hint');
+const resultEl = document.getElementById('result');
+const resultDistanceEl = document.getElementById('resultDistance');
+const resultBestEl = document.getElementById('resultBest');
+const gaugeEl = document.getElementById('gauge');
 const powerBar = document.getElementById('powerBar');
 const powerValue = document.getElementById('powerValue');
+const angleValue = document.getElementById('angleValue');
 
-// Three.js基本設定
-let scene, camera, renderer;
-let player, ball, field;
-let playerParts = {}; // プレイヤーのパーツを保持
-let ballTrail = [];
-
-// ゲーム状態
-const GAME_STATE = {
+const STATE = {
     READY: 'ready',
-    POWER_SELECT: 'power_select',
-    THROWING_ANIMATION: 'throwing_animation',
-    THROWING: 'throwing',
-    CAMERA_ZOOM: 'camera_zoom',
+    AIMING: 'aiming',
+    SWINGING: 'swinging',
+    FLYING: 'flying',
     RESULT: 'result'
 };
 
-let gameState = GAME_STATE.READY;
-let power = 0;
-let powerDirection = 1;
-let ballPhysics = null;
-let distance = 0;
-let bestDistance = parseInt(localStorage.getItem('bestDistance')) || 0;
-let animationFrame = 0;
-let throwAnimationDuration = 60; // フレーム数
-
-// カメラアニメーション用
-let cameraTargetPosition = new THREE.Vector3();
-let cameraTargetLookAt = new THREE.Vector3();
-const CAMERA_ZOOM_SPEED = 0.05; // ズーム速度（0.02-0.1、小さいほどゆっくり）
-
-// 物理定数
 const GRAVITY = 0.02;
 const MAX_POWER = 1.2;
-const FIELD_LENGTH = 80;
+const POWER_SPEED = 120;
+const ANGLE_MIN = 15;
+const ANGLE_MAX = 75;
+const ANGLE_PER_PIXEL = 0.2;
+const WINDUP_SECONDS = 0.25;
+const SWING_SECONDS = 0.22;
+const RELEASE_AT = 0.6;
+const BALL_RADIUS = 0.4;
+const SHOULDER_Y = 2.1;
+const HAND_REACH = 1.45;
+const PLAYER_X = -35;
 
-// 初期化
+const ARM_REST = -1.2;
+const ARM_WINDUP = -Math.PI - 0.6;
+const ARM_FOLLOW = -1.1;
+
+let scene, camera, renderer, player, ball, aimArrow;
+const arms = [];
+const camLook = new THREE.Vector3();
+const camTargetPos = new THREE.Vector3();
+const camTargetLook = new THREE.Vector3();
+
+let state = STATE.READY;
+let power = 0;
+let powerDirection = 1;
+let angle = 45;
+let windup = 0;
+let swing = 0;
+let velocity = null;
+let bestDistance = loadBest();
+let aim = null;
+
+function loadBest() {
+    try {
+        return parseInt(localStorage.getItem('bestDistance'), 10) || 0;
+    } catch {
+        return 0;
+    }
+}
+
+function saveBest(value) {
+    try {
+        localStorage.setItem('bestDistance', String(value));
+    } catch {
+        return;
+    }
+}
+
+function isPortrait() {
+    return innerWidth < innerHeight;
+}
+
 function init() {
     bestEl.textContent = bestDistance;
-    initThreeJS();
-    createField();
-    createPlayer();
-    animate();
-}
 
-// Three.jsシーン初期化
-function initThreeJS() {
-    // シーン作成
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.Fog(0x87CEEB, 50, 100);
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 50, 110);
 
-    // カメラ設定
-    camera = new THREE.PerspectiveCamera(
-        60,
-        canvasContainer.clientWidth / canvasContainer.clientHeight,
-        0.1,
-        1000
-    );
-    // プレイヤーとフィールド全体が見える固定位置
-    const playerX = -FIELD_LENGTH / 2 + 5;
-    camera.position.set(playerX - 8, 6, 15);
-    camera.lookAt(playerX + 15, 2, 0);
+    camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 500);
 
-    // レンダラー作成
     renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    canvasContainer.appendChild(renderer.domElement);
+    stage.appendChild(renderer.domElement);
 
-    // ライト
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+    sun.position.set(20, 30, 10);
+    sun.castShadow = true;
+    Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 30, bottom: -30 });
+    sun.shadow.mapSize.set(1024, 1024);
+    scene.add(sun);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(20, 30, 10);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.camera.left = -50;
-    directionalLight.shadow.camera.right = 50;
-    directionalLight.shadow.camera.top = 50;
-    directionalLight.shadow.camera.bottom = -50;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    scene.add(directionalLight);
+    createField();
+    createPlayer();
+    createBall();
+    createAimArrow();
+    resetRound();
+    snapCamera();
 
-    // リサイズ対応
-    window.addEventListener('resize', onWindowResize, false);
+    addEventListener('resize', onResize);
+    bindInput();
 
-    // クリックイベント
-    canvasContainer.addEventListener('click', onCanvasClick);
-}
-
-function onWindowResize() {
-    camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
-}
-
-// フィールド作成
-function createField() {
-    const fieldGroup = new THREE.Group();
-
-    // 芝生
-    const grassGeometry = new THREE.PlaneGeometry(FIELD_LENGTH, 30);
-    const grassMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2d5016,
-        roughness: 0.8
+    let last = performance.now();
+    renderer.setAnimationLoop(now => {
+        // 1フレーム固定量で進めると 120Hz 端末でボールが倍速になるため、経過時間を60fps換算する
+        const frames = Math.min((now - last) / (1000 / 60), 3);
+        last = now;
+        update(frames);
+        renderer.render(scene, camera);
     });
-    const grass = new THREE.Mesh(grassGeometry, grassMaterial);
+}
+
+function onResize() {
+    camera.aspect = innerWidth / innerHeight;
+    camera.fov = isPortrait() ? 70 : 60;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+}
+
+function createLabel(text) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = 'bold 40px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.strokeText(text, 64, 32);
+    ctx.fillStyle = 'white';
+    ctx.fillText(text, 64, 32);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(canvas),
+        depthWrite: false
+    }));
+    sprite.scale.set(3, 1.5, 1);
+    return sprite;
+}
+
+function addLine(group, from, to) {
+    const line = new THREE.Mesh(
+        new THREE.PlaneGeometry(Math.hypot(to.x - from.x, to.z - from.z) || 0.15, 0.15),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
+    line.rotation.x = -Math.PI / 2;
+    line.rotation.z = -Math.atan2(to.z - from.z, to.x - from.x);
+    line.position.set((from.x + to.x) / 2, 0.02, (from.z + to.z) / 2);
+    group.add(line);
+}
+
+function createField() {
+    const field = new THREE.Group();
+
+    const grass = new THREE.Mesh(
+        new THREE.PlaneGeometry(240, 120),
+        new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.8 })
+    );
     grass.rotation.x = -Math.PI / 2;
     grass.receiveShadow = true;
-    fieldGroup.add(grass);
+    field.add(grass);
 
-    // フィールドライン
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-
-    // サイドライン
-    const sideLineGeometry1 = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-FIELD_LENGTH / 2, 0.01, -15),
-        new THREE.Vector3(FIELD_LENGTH / 2, 0.01, -15)
-    ]);
-    const sideLine1 = new THREE.Line(sideLineGeometry1, lineMaterial);
-    fieldGroup.add(sideLine1);
-
-    const sideLineGeometry2 = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-FIELD_LENGTH / 2, 0.01, 15),
-        new THREE.Vector3(FIELD_LENGTH / 2, 0.01, 15)
-    ]);
-    const sideLine2 = new THREE.Line(sideLineGeometry2, lineMaterial);
-    fieldGroup.add(sideLine2);
-
-    // 距離マーカー
-    for (let i = 0; i <= FIELD_LENGTH; i += 10) {
-        const x = i - FIELD_LENGTH / 2;
-
-        // マーカーライン
-        const markerGeometry = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(x, 0.01, -15),
-            new THREE.Vector3(x, 0.01, -13)
-        ]);
-        const marker = new THREE.Line(markerGeometry, lineMaterial);
-        fieldGroup.add(marker);
-
-        // テキスト（簡易版：小さい立方体で表現）
-        const textGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-        const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const textMesh = new THREE.Mesh(textGeometry, textMaterial);
-        textMesh.position.set(x, 0.5, -14);
-        fieldGroup.add(textMesh);
+    for (let i = 0; i < 12; i += 2) {
+        const stripe = new THREE.Mesh(
+            new THREE.PlaneGeometry(10, 30),
+            new THREE.MeshStandardMaterial({ color: 0x3a6b1e, roughness: 0.8 })
+        );
+        stripe.rotation.x = -Math.PI / 2;
+        stripe.position.set(PLAYER_X + 5 + i * 10, 0.005, 0);
+        stripe.receiveShadow = true;
+        field.add(stripe);
     }
 
-    scene.add(fieldGroup);
-    field = fieldGroup;
+    addLine(field, { x: PLAYER_X - 5, z: -15 }, { x: PLAYER_X + 125, z: -15 });
+    addLine(field, { x: PLAYER_X - 5, z: 15 }, { x: PLAYER_X + 125, z: 15 });
+
+    for (let m = 10; m <= 100; m += 10) {
+        const x = PLAYER_X + m;
+        addLine(field, { x, z: -15 }, { x, z: 15 });
+        const label = createLabel(`${m}m`);
+        label.position.set(x, 0.9, -4);
+        field.add(label);
+    }
+
+    scene.add(field);
 }
 
-// プレイヤー作成
+function createArm(side, material) {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.55, SHOULDER_Y, 0);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 1.2, 8), material);
+    arm.position.y = -0.6;
+    arm.castShadow = true;
+    pivot.add(arm);
+    return pivot;
+}
+
 function createPlayer() {
-    const playerGroup = new THREE.Group();
+    player = new THREE.Group();
+    const shirt = new THREE.MeshStandardMaterial({ color: 0x2196f3 });
+    const shorts = new THREE.MeshStandardMaterial({ color: 0x1976d2 });
 
-    // 体（箱）
-    const bodyGeometry = new THREE.BoxGeometry(0.8, 1.5, 0.5);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x2196F3 });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 1.5;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.5), shirt);
+    body.position.y = 1.75;
     body.castShadow = true;
-    playerGroup.add(body);
-    playerParts.body = body;
+    player.add(body);
 
-    // 頭
-    const headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
-    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xFFDBAC });
-    const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.y = 2.6;
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4, 16, 16),
+        new THREE.MeshStandardMaterial({ color: 0xffdbac })
+    );
+    head.position.y = 2.75;
     head.castShadow = true;
-    playerGroup.add(head);
-    playerParts.head = head;
+    player.add(head);
 
-    // 腕（右）- スローイン用
-    const armGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.2, 8);
-    const armMaterial = new THREE.MeshStandardMaterial({ color: 0x2196F3 });
-    const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-    rightArm.position.set(0.6, 1.5, 0);
-    rightArm.castShadow = true;
-    playerGroup.add(rightArm);
-    playerParts.rightArm = rightArm;
+    for (const side of [-1, 1]) {
+        const arm = createArm(side, shirt);
+        player.add(arm);
+        arms.push(arm);
 
-    // 腕（左）
-    const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-    leftArm.position.set(-0.6, 1.5, 0);
-    leftArm.castShadow = true;
-    playerGroup.add(leftArm);
-    playerParts.leftArm = leftArm;
-
-    // 脚（右）
-    const legGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8);
-    const legMaterial = new THREE.MeshStandardMaterial({ color: 0x1976D2 });
-    const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-    rightLeg.position.set(0.25, 0.75, 0);
-    rightLeg.castShadow = true;
-    playerGroup.add(rightLeg);
-    playerParts.rightLeg = rightLeg;
-
-    // 脚（左）
-    const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-    leftLeg.position.set(-0.25, 0.75, 0);
-    leftLeg.castShadow = true;
-    playerGroup.add(leftLeg);
-    playerParts.leftLeg = leftLeg;
-
-    playerGroup.position.set(-FIELD_LENGTH / 2 + 5, 0, 0);
-    scene.add(playerGroup);
-    player = playerGroup;
-
-    // 初期ポーズを設定
-    resetPlayerPose();
-}
-
-// プレイヤーのポーズをリセット
-function resetPlayerPose() {
-    if (!playerParts.rightArm || !playerParts.leftArm) return;
-
-    playerParts.rightArm.rotation.set(0, 0, Math.PI / 4);
-    playerParts.rightArm.position.set(0.6, 1.5, 0);
-
-    playerParts.leftArm.rotation.set(0, 0, -Math.PI / 4);
-    playerParts.leftArm.position.set(-0.6, 1.5, 0);
-}
-
-// スローインアニメーション更新
-function updateThrowAnimation() {
-    animationFrame++;
-
-    const progress = animationFrame / throwAnimationDuration;
-
-    if (progress <= 0.5) {
-        // 前半: ボールを頭上に持ち上げる
-        const t = progress * 2; // 0 to 1
-
-        // 両腕を上げる
-        playerParts.rightArm.rotation.z = Math.PI / 4 - t * (Math.PI * 0.6);
-        playerParts.rightArm.position.y = 1.5 + t * 0.5;
-
-        playerParts.leftArm.rotation.z = -Math.PI / 4 + t * (Math.PI * 0.6);
-        playerParts.leftArm.position.y = 1.5 + t * 0.5;
-
-        // ボールを手の位置に
-        if (ball) {
-            ball.position.set(
-                player.position.x + 0.3,
-                player.position.y + 2.8 + t * 0.5,
-                0
-            );
-        }
-    } else {
-        // 後半: 投げる動作
-        const t = (progress - 0.5) * 2; // 0 to 1
-
-        // 腕を前に振る
-        playerParts.rightArm.rotation.z = -Math.PI / 3 - t * Math.PI / 3;
-        playerParts.rightArm.rotation.x = -t * Math.PI / 4;
-        playerParts.rightArm.position.y = 2.0 - t * 0.3;
-
-        playerParts.leftArm.rotation.z = Math.PI / 3 + t * Math.PI / 3;
-        playerParts.leftArm.rotation.x = -t * Math.PI / 4;
-        playerParts.leftArm.position.y = 2.0 - t * 0.3;
-
-        // ボールを前方に移動
-        if (ball) {
-            ball.position.set(
-                player.position.x + 0.3 + t * 1.5,
-                player.position.y + 3.3 - t * 0.8,
-                0
-            );
-        }
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.2, 8), shorts);
+        leg.position.set(side * 0.22, 0.6, 0);
+        leg.castShadow = true;
+        player.add(leg);
     }
 
-    // アニメーション完了
-    if (animationFrame >= throwAnimationDuration) {
-        releaseBall();
-    }
+    player.rotation.y = Math.PI / 2;
+    player.position.set(PLAYER_X, 0, 0);
+    scene.add(player);
 }
 
-// ボールを放す
-function releaseBall() {
-    if (!ball) return;
-
-    const angle = 45 * (Math.PI / 180);
-    const velocity = (power / 100) * MAX_POWER;
-
-    ballPhysics = {
-        velocityX: Math.cos(angle) * velocity,
-        velocityY: Math.sin(angle) * velocity,
-        velocityZ: 0
-    };
-
-    ballTrail = [];
-    gameState = GAME_STATE.THROWING;
-
-    // カメラは固定（プレイヤーとボールの両方が見える位置）
-    // カメラ位置は変更しない
-}
-
-// 五角形の形状を作成
-function createPentagonShape(size) {
-    const shape = new THREE.Shape();
-    for (let i = 0; i < 5; i++) {
-        const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
-        const x = Math.cos(angle) * size;
-        const y = Math.sin(angle) * size;
-        if (i === 0) {
-            shape.moveTo(x, y);
-        } else {
-            shape.lineTo(x, y);
+function createBall() {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size * 2;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, size * 2, size);
+    ctx.fillStyle = '#111';
+    const spots = [[0.12, 0.5], [0.37, 0.25], [0.37, 0.75], [0.62, 0.5], [0.87, 0.25], [0.87, 0.75], [0.25, 0.05], [0.75, 0.95]];
+    for (const [u, v] of spots) {
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+            ctx.lineTo(u * size * 2 + Math.cos(a) * 18, v * size + Math.sin(a) * 18);
         }
+        ctx.fill();
     }
-    shape.lineTo(Math.cos(-Math.PI / 2) * size, Math.sin(-Math.PI / 2) * size);
-    return shape;
+
+    ball = new THREE.Mesh(
+        new THREE.SphereGeometry(BALL_RADIUS, 24, 16),
+        new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(canvas), roughness: 0.4 })
+    );
+    ball.castShadow = true;
+    scene.add(ball);
 }
 
-// ボール作成（投げる前、手に持つ）
-function createBallInHand() {
-    const ballGroup = new THREE.Group();
-    const ballRadius = 0.4;
+function createAimArrow() {
+    aimArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 1, 0).normalize(), new THREE.Vector3(), 4, 0xffd23f, 0.9, 0.6);
+    aimArrow.visible = false;
+    scene.add(aimArrow);
+}
 
-    // 白いベース球体
-    const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
-    const ballMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.4,
-        metalness: 0.0
+function setArms(armAngle) {
+    for (const arm of arms) arm.rotation.x = armAngle;
+    ball.position.set(
+        player.position.x - HAND_REACH * Math.sin(armAngle),
+        SHOULDER_Y - HAND_REACH * Math.cos(armAngle),
+        0
+    );
+}
+
+function updateAimArrow() {
+    const rad = THREE.MathUtils.degToRad(angle);
+    aimArrow.position.copy(ball.position);
+    aimArrow.setDirection(new THREE.Vector3(Math.cos(rad), Math.sin(rad), 0));
+    aimArrow.setLength(2 + 3 * (power / 100), 0.9, 0.6);
+}
+
+function resetRound() {
+    state = STATE.READY;
+    power = 0;
+    powerDirection = 1;
+    windup = 0;
+    swing = 0;
+    velocity = null;
+    ball.rotation.set(0, 0, 0);
+    setArms(ARM_REST);
+    aimArrow.visible = false;
+    resultEl.hidden = true;
+    gaugeEl.hidden = true;
+    distanceEl.textContent = 0;
+}
+
+function startAiming(y) {
+    if (state === STATE.RESULT) resetRound();
+    if (state !== STATE.READY) return;
+    state = STATE.AIMING;
+    aim = { startY: y, startAngle: angle };
+    hintEl.hidden = true;
+    gaugeEl.hidden = false;
+    aimArrow.visible = true;
+    vibrate(10);
+}
+
+function moveAim(y) {
+    if (state !== STATE.AIMING || !aim) return;
+    angle = THREE.MathUtils.clamp(
+        Math.round(aim.startAngle + (aim.startY - y) * ANGLE_PER_PIXEL),
+        ANGLE_MIN,
+        ANGLE_MAX
+    );
+}
+
+function release() {
+    aim = null;
+    if (state !== STATE.AIMING) return;
+    state = STATE.SWINGING;
+    swing = 0;
+    aimArrow.visible = false;
+    vibrate(25);
+}
+
+function cancelAim() {
+    aim = null;
+    if (state === STATE.AIMING) resetRound();
+}
+
+function vibrate(ms) {
+    if (navigator.vibrate) navigator.vibrate(ms);
+}
+
+function bindInput() {
+    const canvas = renderer.domElement;
+    let pointerId = null;
+
+    canvas.addEventListener('pointerdown', e => {
+        if (pointerId !== null) return;
+        pointerId = e.pointerId;
+        canvas.setPointerCapture(e.pointerId);
+        startAiming(e.clientY);
     });
-    const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
-    ballMesh.castShadow = true;
-    ballGroup.add(ballMesh);
-
-    // 黒い五角形のパターン
-    const pentagonShape = createPentagonShape(0.15);
-    const extrudeSettings = {
-        depth: 0.02,
-        bevelEnabled: false
-    };
-    const pentagonGeometry = new THREE.ExtrudeGeometry(pentagonShape, extrudeSettings);
-    const pentagonMaterial = new THREE.MeshStandardMaterial({
-        color: 0x000000,
-        roughness: 0.6
+    canvas.addEventListener('pointermove', e => {
+        if (e.pointerId === pointerId) moveAim(e.clientY);
     });
-
-    // 正十二面体の頂点位置に五角形を配置
-    const phi = (1 + Math.sqrt(5)) / 2; // 黄金比
-    const pentagonPositions = [
-        // 上下
-        [0, 1, 0],
-        [0, -1, 0],
-        // 上部リング
-        [1, phi, 0],
-        [-1, phi, 0],
-        [0, phi, 1],
-        [0, phi, -1],
-        // 下部リング
-        [1, -phi, 0],
-        [-1, -phi, 0],
-        [0, -phi, 1],
-        [0, -phi, -1],
-        // 中央リング
-        [phi, 0, 1],
-        [phi, 0, -1]
-    ];
-
-    pentagonPositions.forEach(pos => {
-        const pentagon = new THREE.Mesh(pentagonGeometry, pentagonMaterial);
-
-        // 位置を正規化して球面に配置
-        const length = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
-        const x = (pos[0] / length) * (ballRadius + 0.01);
-        const y = (pos[1] / length) * (ballRadius + 0.01);
-        const z = (pos[2] / length) * (ballRadius + 0.01);
-
-        pentagon.position.set(x, y, z);
-
-        // 球面に沿って回転
-        pentagon.lookAt(x * 2, y * 2, z * 2);
-
-        pentagon.castShadow = true;
-        ballGroup.add(pentagon);
+    canvas.addEventListener('pointerup', e => {
+        if (e.pointerId !== pointerId) return;
+        pointerId = null;
+        release();
     });
+    canvas.addEventListener('pointercancel', e => {
+        if (e.pointerId !== pointerId) return;
+        pointerId = null;
+        cancelAim();
+    });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    ballGroup.position.set(player.position.x + 0.3, player.position.y + 2.8, 0);
-    scene.add(ballGroup);
-    ball = ballGroup;
-}
-
-// パワーゲージ更新
-function updatePowerGauge() {
-    power += powerDirection * 2;
-    if (power >= 100 || power <= 0) {
-        powerDirection *= -1;
-    }
-    power = Math.max(0, Math.min(100, power));
-
-    powerBar.style.width = power + '%';
-    powerValue.textContent = Math.round(power);
-}
-
-// ボール物理更新
-function updateBallPhysics() {
-    if (!ballPhysics || !ball) return;
-
-    ballPhysics.velocityY -= GRAVITY;
-    ball.position.x += ballPhysics.velocityX;
-    ball.position.y += ballPhysics.velocityY;
-    ball.position.z += ballPhysics.velocityZ;
-
-    // ボール回転
-    ball.rotation.x += 0.1;
-    ball.rotation.z += 0.05;
-
-    // 軌跡エフェクト
-    if (ballTrail.length > 0) {
-        const lastPos = ballTrail[ballTrail.length - 1];
-        if (ball.position.distanceTo(lastPos) > 0.5) {
-            ballTrail.push(ball.position.clone());
-            if (ballTrail.length > 20) {
-                ballTrail.shift();
-            }
+    addEventListener('keydown', e => {
+        if (e.code === 'Space' && !e.repeat) {
+            e.preventDefault();
+            startAiming(0);
+        } else if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+            e.preventDefault();
+            angle = THREE.MathUtils.clamp(angle + (e.code === 'ArrowUp' ? 1 : -1), ANGLE_MIN, ANGLE_MAX);
         }
-    } else {
-        ballTrail.push(ball.position.clone());
-    }
-
-    // 地面に着いたら停止
-    if (ball.position.y <= 0.4) {
-        ball.position.y = 0.4;
-        ballPhysics.velocityX = 0;
-        ballPhysics.velocityY = 0;
-        ballPhysics.velocityZ = 0;
-
-        // 飛距離計算
-        const startX = player.position.x;
-        distance = Math.round(ball.position.x - startX);
-        distanceEl.textContent = distance;
-
-        // ベスト更新
-        if (distance > bestDistance) {
-            bestDistance = distance;
-            bestEl.textContent = bestDistance;
-            localStorage.setItem('bestDistance', bestDistance);
-        }
-
-        // カメラズームアニメーション開始
-        cameraTargetPosition.set(ball.position.x - 3, 3, 8);
-        cameraTargetLookAt.copy(ball.position);
-        gameState = GAME_STATE.CAMERA_ZOOM;
-    }
+    });
+    addEventListener('keyup', e => {
+        if (e.code === 'Space') release();
+    });
 }
 
-// カメラズームアニメーション更新
-function updateCameraZoom() {
-    // 現在位置から目標位置に向かって徐々に移動
-    camera.position.lerp(cameraTargetPosition, CAMERA_ZOOM_SPEED);
+function updateAiming(frames) {
+    windup = Math.min(windup + frames / 60 / WINDUP_SECONDS, 1);
+    const eased = 1 - (1 - windup) ** 2;
+    setArms(ARM_REST + (ARM_WINDUP - ARM_REST) * eased);
 
-    // 現在の注視点を計算
-    const currentLookAtTarget = new THREE.Vector3(player.position.x + 15, 2, 0);
-    currentLookAtTarget.lerp(cameraTargetLookAt, CAMERA_ZOOM_SPEED);
-    camera.lookAt(currentLookAtTarget);
-
-    // 目標位置に十分近づいたら完了
-    const distance = camera.position.distanceTo(cameraTargetPosition);
-    if (distance < 0.1) {
-        camera.position.copy(cameraTargetPosition);
-        camera.lookAt(cameraTargetLookAt);
-        gameState = GAME_STATE.RESULT;
-        startBtn.disabled = false;
-        startBtn.textContent = 'もう一度';
-    }
-}
-
-// 投げるアニメーション開始
-function startThrowAnimation() {
-    // カメラをプレイヤーの斜め後方上空に固定
-    // プレイヤーとボールの軌道が両方見える位置
-    camera.position.set(player.position.x - 8, 6, 15);
-    camera.lookAt(player.position.x + 15, 2, 0);
-
-    // ボールを作成
-    createBallInHand();
-
-    animationFrame = 0;
-    gameState = GAME_STATE.THROWING_ANIMATION;
-    powerGaugeUI.classList.remove('active');
-}
-
-// アニメーションループ
-function animate() {
-    requestAnimationFrame(animate);
-
-    if (gameState === GAME_STATE.POWER_SELECT) {
-        updatePowerGauge();
-    }
-
-    if (gameState === GAME_STATE.THROWING_ANIMATION) {
-        updateThrowAnimation();
-    }
-
-    if (gameState === GAME_STATE.THROWING) {
-        updateBallPhysics();
-    }
-
-    if (gameState === GAME_STATE.CAMERA_ZOOM) {
-        updateCameraZoom();
-    }
-
-    renderer.render(scene, camera);
-}
-
-// キャンバスクリック
-function onCanvasClick() {
-    if (gameState === GAME_STATE.POWER_SELECT) {
-        startThrowAnimation();
-    }
-}
-
-// スタートボタン
-startBtn.addEventListener('click', () => {
-    if (gameState === GAME_STATE.READY || gameState === GAME_STATE.RESULT) {
-        gameState = GAME_STATE.POWER_SELECT;
+    power += powerDirection * POWER_SPEED * (frames / 60);
+    if (power >= 100) {
+        power = 100;
+        powerDirection = -1;
+    } else if (power <= 0) {
         power = 0;
         powerDirection = 1;
-        distance = 0;
-        distanceEl.textContent = 0;
-        startBtn.disabled = true;
-        powerGaugeUI.classList.add('active');
+    }
+    powerBar.style.width = `${power}%`;
+    powerValue.textContent = Math.round(power);
+    angleValue.textContent = angle;
+    updateAimArrow();
+}
 
-        // ボール削除
-        if (ball) {
-            scene.remove(ball);
-            ball = null;
+function updateSwing(frames) {
+    swing = Math.min(swing + frames / 60 / SWING_SECONDS, 1);
+    const from = ARM_REST + (ARM_WINDUP - ARM_REST) * (1 - (1 - windup) ** 2);
+    const armAngle = from + (ARM_FOLLOW - from) * swing;
+
+    if (!velocity) {
+        setArms(armAngle);
+        if (swing >= RELEASE_AT) {
+            const rad = THREE.MathUtils.degToRad(angle);
+            const speed = (power / 100) * MAX_POWER;
+            velocity = new THREE.Vector3(Math.cos(rad) * speed, Math.sin(rad) * speed, 0);
         }
-        ballPhysics = null;
-        ballTrail = [];
-
-        // プレイヤーのポーズリセット
-        resetPlayerPose();
-
-        // カメラリセット（プレイヤーが見える位置）
-        camera.position.set(player.position.x - 8, 6, 15);
-        camera.lookAt(player.position.x + 15, 2, 0);
+    } else {
+        for (const arm of arms) arm.rotation.x = armAngle;
+        updateBall(frames);
     }
-});
+    if (swing >= 1 && velocity) state = STATE.FLYING;
+}
 
-// リセットボタン
-resetBtn.addEventListener('click', () => {
-    gameState = GAME_STATE.READY;
-    power = 0;
-    distance = 0;
-    distanceEl.textContent = 0;
-    startBtn.disabled = false;
-    startBtn.textContent = 'スタート';
-    powerGaugeUI.classList.remove('active');
+function updateBall(frames) {
+    velocity.y -= GRAVITY * frames;
+    ball.position.addScaledVector(velocity, frames);
+    ball.rotation.z -= 0.15 * frames;
 
-    if (ball) {
-        scene.remove(ball);
-        ball = null;
+    if (ball.position.y > BALL_RADIUS) return;
+    ball.position.y = BALL_RADIUS;
+    finish();
+}
+
+function finish() {
+    state = STATE.RESULT;
+    gaugeEl.hidden = true;
+    const distance = Math.max(0, Math.round(ball.position.x - player.position.x));
+    distanceEl.textContent = distance;
+    resultDistanceEl.textContent = `${distance}m`;
+    const isBest = distance > bestDistance;
+    resultBestEl.hidden = !isBest;
+    if (isBest) {
+        bestDistance = distance;
+        bestEl.textContent = bestDistance;
+        saveBest(bestDistance);
     }
-    ballPhysics = null;
-    ballTrail = [];
+    resultEl.hidden = false;
+    vibrate(isBest ? [30, 60, 30] : 30);
+}
 
-    // プレイヤーのポーズリセット
-    resetPlayerPose();
+function setCameraTarget() {
+    const portrait = isPortrait();
+    const p = ball.position;
+    const px = player.position.x;
 
-    // カメラリセット（プレイヤーが見える位置）
-    camera.position.set(player.position.x - 8, 6, 15);
-    camera.lookAt(player.position.x + 15, 2, 0);
-});
+    if (state === STATE.FLYING || (state === STATE.SWINGING && velocity)) {
+        // 縦画面は投げた方向を奥行きで見せるため背後から、横画面は真横から追う
+        if (portrait) {
+            camTargetPos.set(p.x - 9, Math.max(5, p.y * 0.6 + 3), 4);
+            camTargetLook.set(p.x + 8, Math.max(0.5, p.y * 0.5), 0);
+        } else {
+            camTargetPos.set(Math.max(px - 8, p.x - 14), 6, 15);
+            camTargetLook.set(Math.max(px + 15, p.x + 2), Math.max(2, p.y * 0.6), 0);
+        }
+    } else if (state === STATE.RESULT) {
+        if (portrait) {
+            camTargetPos.set(p.x - 6, 3.5, 3);
+        } else {
+            camTargetPos.set(p.x - 3, 3, 8);
+        }
+        camTargetLook.copy(p);
+    } else if (portrait) {
+        camTargetPos.set(px - 9, 6, 3);
+        camTargetLook.set(px + 22, 0, -1);
+    } else {
+        camTargetPos.set(px - 8, 6, 15);
+        camTargetLook.set(px + 15, 2, 0);
+    }
+}
 
-// ゲーム開始
+function snapCamera() {
+    onResize();
+    setCameraTarget();
+    camera.position.copy(camTargetPos);
+    camLook.copy(camTargetLook);
+    camera.lookAt(camLook);
+}
+
+function updateCamera(frames) {
+    setCameraTarget();
+    const k = 1 - Math.pow(1 - 0.08, frames);
+    camera.position.lerp(camTargetPos, k);
+    camLook.lerp(camTargetLook, k);
+    camera.lookAt(camLook);
+}
+
+function update(frames) {
+    if (state === STATE.AIMING) updateAiming(frames);
+    else if (state === STATE.SWINGING) updateSwing(frames);
+    else if (state === STATE.FLYING) updateBall(frames);
+    updateCamera(frames);
+}
+
 init();
