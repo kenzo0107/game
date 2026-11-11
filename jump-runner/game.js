@@ -40,7 +40,7 @@ function resizeCanvas() {
 
 function applyWorldTransform() {
     const k = view.scale * view.dpr;
-    ctx.setTransform(k, 0, 0, k, 0, -view.top * k);
+    ctx.setTransform(k, 0, 0, k, shake.x * k, (shake.y - view.top) * k);
 }
 
 resizeCanvas();
@@ -99,6 +99,19 @@ class Player {
         this.starPowerTimer = 0; // 10秒 = 600フレーム
         // アニメーション用
         this.animationFrame = 0;
+        this.runPhase = 0;
+        this.scaleX = 1;
+        this.scaleY = 1;
+        this.stompCombo = 0;
+    }
+
+    stretch(scaleX, scaleY) {
+        this.scaleX = scaleX;
+        this.scaleY = scaleY;
+    }
+
+    get feetY() {
+        return this.y + this.height + 8;
     }
 
     jump() {
@@ -109,12 +122,16 @@ class Player {
             this.velocityY = this.jumpPower;
             this.isJumping = true;
             this.doubleJumpUsed = false;
+            this.stretch(0.75, 1.3);
+            landingDust(this.x + this.width / 2, this.feetY);
             playJumpSound();
         }
         // 空中での二段ジャンプ
         else if (this.hasDoubleJump && !this.doubleJumpUsed) {
             this.velocityY = this.jumpPower;
             this.doubleJumpUsed = true;
+            this.stretch(0.75, 1.3);
+            jumpRing(this.x + this.width / 2, this.feetY);
             playJumpSound();
         }
     }
@@ -140,10 +157,28 @@ class Player {
         }
 
         // 地面判定
-        if (this.y > currentGroundY) {
+        const grounded = this.y > currentGroundY;
+        if (grounded) {
+            if (this.isJumping) {
+                this.stretch(1.35, 0.7);
+                landingDust(this.x + this.width / 2, this.feetY);
+            }
+            this.stompCombo = 0;
             this.y = currentGroundY;
             this.velocityY = 0;
             this.isJumping = false;
+        }
+
+        this.scaleX += (1 - this.scaleX) * 0.2;
+        this.scaleY += (1 - this.scaleY) * 0.2;
+
+        if (!grounded) {
+            this.stretch(this.scaleX, Math.max(this.scaleY, 1 + Math.min(Math.abs(this.velocityY) * 0.012, 0.15)));
+        } else {
+            this.runPhase += 0.18 + gameSpeed * 0.04;
+            if (this.isPlayer && this.animationFrame % 6 === 0) {
+                runDust(this.x + 4, this.feetY);
+            }
         }
 
         // 二段ジャンプタイマー処理
@@ -228,6 +263,36 @@ class Player {
             ctx.stroke();
         }
 
+        const cx = this.x + this.width / 2;
+        const bob = this.isJumping ? 0 : -Math.abs(Math.sin(this.runPhase)) * 3;
+        const lean = this.isJumping ? Math.max(Math.min(this.velocityY * 0.02, 0.25), -0.25) : 0.12;
+        ctx.save();
+        ctx.translate(cx, this.feetY + bob);
+        ctx.rotate(lean);
+        ctx.scale(this.scaleX, this.scaleY);
+        ctx.translate(-cx, -this.feetY);
+
+        const limbColor = this.team === 'ally' ? '#006400' : '#8B0000';
+        const swing = Math.sin(this.runPhase);
+        ctx.strokeStyle = limbColor;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 5;
+        const hipY = this.y + this.height - 2;
+        for (const [hipX, phase] of [[this.x + 9, swing], [this.x + 21, -swing]]) {
+            ctx.beginPath();
+            ctx.moveTo(hipX, hipY);
+            if (this.isJumping) {
+                ctx.lineTo(hipX - 6, hipY + 5);
+                ctx.lineTo(hipX - 2, hipY + 10);
+            } else {
+                const footX = hipX + phase * 9;
+                const kneeLift = Math.max(phase, 0) * 5;
+                ctx.lineTo(hipX + phase * 5, hipY + 6 - kneeLift);
+                ctx.lineTo(footX, hipY + 10 - kneeLift);
+            }
+            ctx.stroke();
+        }
+
         // キャラクター本体
         if (this.team === 'ally') {
             ctx.fillStyle = this.isPlayer ? '#00ff00' : '#90EE90';
@@ -235,55 +300,47 @@ class Player {
             ctx.fillStyle = '#ff4444';
         }
         ctx.fillRect(this.x, this.y, this.width, this.height);
-
-        // 枠線
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
         ctx.strokeRect(this.x, this.y, this.width, this.height);
 
-        // 目を追加
         ctx.fillStyle = '#fff';
-        const eyeSize = 6;
-        ctx.fillRect(this.x + 7, this.y + 8, eyeSize, eyeSize);
-        ctx.fillRect(this.x + 17, this.y + 8, eyeSize, eyeSize);
-
-        // 瞳
+        ctx.fillRect(this.x + 9, this.y + 7, 7, 7);
+        ctx.fillRect(this.x + 19, this.y + 7, 7, 7);
         ctx.fillStyle = '#000';
-        ctx.fillRect(this.x + 9, this.y + 10, 3, 3);
-        ctx.fillRect(this.x + 19, this.y + 10, 3, 3);
+        const pupilY = this.isJumping && this.velocityY < 0 ? this.y + 8 : this.y + 10;
+        ctx.fillRect(this.x + 12, pupilY, 3, 3);
+        ctx.fillRect(this.x + 22, pupilY, 3, 3);
 
-        // 走るアニメーション用の腕と足
-        const legSwing = Math.sin(this.animationFrame * 0.2) * 3;
-        const armSwing = Math.sin(this.animationFrame * 0.2) * 4;
-
-        // 足（地面に着いている時のみアニメーション）
-        ctx.fillStyle = this.team === 'ally' ? '#006400' : '#8B0000';
-        if (!this.isJumping) {
-            // 左足
-            ctx.fillRect(this.x + 6 + legSwing, this.y + this.height, 6, 8);
-            // 右足
-            ctx.fillRect(this.x + 18 - legSwing, this.y + this.height, 6, 8);
+        ctx.fillStyle = '#000';
+        if (this.isJumping) {
+            ctx.beginPath();
+            ctx.arc(this.x + 20, this.y + 21, 3, 0, Math.PI * 2);
+            ctx.fill();
         } else {
-            // ジャンプ中は足を揃える
-            ctx.fillRect(this.x + 6, this.y + this.height, 6, 8);
-            ctx.fillRect(this.x + 18, this.y + this.height, 6, 8);
+            ctx.fillRect(this.x + 16, this.y + 20, 8, 2);
         }
 
-        // 腕（振っている動き）
-        ctx.strokeStyle = this.team === 'ally' ? '#006400' : '#8B0000';
-        ctx.lineWidth = 3;
-
-        // 左腕
-        ctx.beginPath();
-        ctx.moveTo(this.x + 5, this.y + 12);
-        ctx.lineTo(this.x - 2, this.y + 18 + armSwing);
-        ctx.stroke();
-
-        // 右腕
-        ctx.beginPath();
-        ctx.moveTo(this.x + 25, this.y + 12);
-        ctx.lineTo(this.x + 32, this.y + 18 - armSwing);
-        ctx.stroke();
+        ctx.strokeStyle = limbColor;
+        ctx.lineWidth = 4;
+        const shoulderY = this.y + 14;
+        if (this.isJumping) {
+            for (const shoulderX of [this.x + 2, this.x + 28]) {
+                ctx.beginPath();
+                ctx.moveTo(shoulderX, shoulderY);
+                ctx.lineTo(shoulderX + (shoulderX < cx ? -6 : 6), shoulderY - 12);
+                ctx.stroke();
+            }
+        } else {
+            for (const [shoulderX, phase] of [[this.x + 2, -swing], [this.x + 28, swing]]) {
+                ctx.beginPath();
+                ctx.moveTo(shoulderX, shoulderY);
+                ctx.lineTo(shoulderX + phase * 8, shoulderY + 9 - Math.abs(phase) * 3);
+                ctx.stroke();
+            }
+        }
+        ctx.lineCap = 'butt';
+        ctx.restore();
 
         // プレイヤー表示
         if (this.isPlayer) {
@@ -1337,8 +1394,79 @@ class Tree {
     }
 }
 
+class Coin {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 16;
+        this.height = 16;
+        this.spin = Math.random() * Math.PI;
+    }
+
+    update() {
+        this.x -= gameSpeed;
+        this.spin += 0.12;
+    }
+
+    draw() {
+        const cx = this.x + this.width / 2;
+        const cy = this.y + this.height / 2;
+        const rx = Math.max(Math.abs(Math.cos(this.spin)) * 8, 1.5);
+        ctx.fillStyle = '#FFC107';
+        ctx.strokeStyle = '#8D6E00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (rx > 4) {
+            ctx.fillStyle = '#FFF59D';
+            ctx.fillRect(cx - rx / 3, cy - 4, Math.max(rx / 3, 1), 8);
+        }
+    }
+
+    isOffScreen() {
+        return this.x + this.width < 0;
+    }
+}
+
+function spawnCoinArc(startX, width) {
+    for (let i = 0; i < 5; i++) {
+        const t = i / 4;
+        coins.push(new Coin(startX - 30 + t * (width + 60), 320 - Math.sin(t * Math.PI) * 110));
+    }
+}
+
+function spawnCoinRow() {
+    for (let i = 0; i < 5; i++) {
+        coins.push(new Coin(view.width + i * 28, 355));
+    }
+}
+
+function hitBoss(x, y) {
+    const defeated = boss.takeDamage();
+    if (defeated) {
+        const bossX = boss.x + boss.width / 2;
+        const bossY = boss.y + boss.height / 2;
+        explosionEffect(bossX, bossY, 2);
+        starBurst(bossX, bossY, 14);
+        addBanner('BOSS げきは!!');
+        addScore(500, bossX, boss.y - 20);
+        playBossDefeatSound();
+        boss = null;
+        switchBgm(bgmAfterBoss());
+    } else {
+        explosionEffect(x, y);
+        addPopup(x, y - 30, 'HIT!', '#FF5252', 22);
+        playStompSound();
+    }
+}
+
 // ゲームオブジェクト
 let player = null;
+let coins = [];
+let coinTimer = 0;
+let nextMilestone = 1000;
 let obstacles = [];
 let enemies = [];
 let bullets = [];
@@ -1529,16 +1657,17 @@ function playItemSound() {
 }
 
 // 敵を踏んづけた時の効果音
-function playStompSound() {
+function playStompSound(combo = 1) {
     if (!audioContext) return;
 
     const currentTime = audioContext.currentTime;
+    const pitch = 1 + Math.min(combo - 1, 6) * 0.15;
 
     // ピコピコと弾むような音
     const notes = [
-        { freq: 800, time: 0 },
-        { freq: 600, time: 0.05 },
-        { freq: 400, time: 0.1 }
+        { freq: 800 * pitch, time: 0 },
+        { freq: 600 * pitch, time: 0.05 },
+        { freq: 400 * pitch, time: 0.1 }
     ];
 
     notes.forEach(note => {
@@ -1558,6 +1687,13 @@ function playStompSound() {
         oscillator.start(startTime);
         oscillator.stop(startTime + 0.08);
     });
+}
+
+function playCoinSound() {
+    if (!audioContext) return;
+    const t = audioContext.currentTime;
+    playTone(987.77, 0.07, t, 'square');
+    playTone(1318.51, 0.2, t + 0.07, 'square');
 }
 
 // ボス撃破音
@@ -1780,6 +1916,10 @@ function init() {
     bullets = [];
     bombs = [];
     items = [];
+    coins = [];
+    coinTimer = 0;
+    nextMilestone = 1000;
+    clearEffects();
     boss = null;
     bossLevel = 0;
     nextBossScore = 3000;
@@ -1823,6 +1963,24 @@ const scoreElement = document.getElementById('score');
 function updateUI() {
     scoreElement.textContent = score;
     scoreElement.hidden = gameState !== 'playing';
+}
+
+function addScore(points, x, y, color = '#FFD700') {
+    score += points;
+    addPopup(x, y, `+${points}`, color);
+    scoreElement.classList.remove('bump');
+    // クラスを付け直すだけではアニメーションが再生されないため、リフローを挟む
+    void scoreElement.offsetWidth;
+    scoreElement.classList.add('bump');
+    updateUI();
+}
+
+function rewardJumpOver(target) {
+    if (target.passed || target.x + target.width >= player.x) return;
+    target.passed = true;
+    if (player.alive && player.isJumping) {
+        addScore(10, target.x + target.width / 2, target.y - 10, '#FFFFFF');
+    }
 }
 
 // 衝突判定
@@ -1969,12 +2127,22 @@ function tick() {
             gameSpeed += 0.2;
         }
     }
+    if (score >= nextMilestone) {
+        addBanner(`${nextMilestone} てん とっぱ!`);
+        playItemSound();
+        nextMilestone += 1000;
+    }
+    if (Math.random() < Math.min((gameSpeed - 2) * 0.08, 0.4)) {
+        speedLine(view.width, view.top + 20, 330, gameSpeed);
+    }
     updateUI();
 
     // ボス出現判定（3000, 6000, 9000...）
     if (!boss && score >= nextBossScore) {
         bossLevel++;
         boss = new Boss(bossLevel);
+        addBanner('WARNING!! BOSS', '#FF5252');
+        shakeScreen(8);
         playBossAppearSound();
         switchBgm('battle');
         // 次のボス出現スコアを設定
@@ -2047,10 +2215,18 @@ function tick() {
             } else {
                 type = 'step';
             }
-            obstacles.push(new Obstacle(type));
+            const obstacle = new Obstacle(type);
+            obstacles.push(obstacle);
+            if ((type === 'hole' || type === 'block') && Math.random() < 0.6) {
+                spawnCoinArc(obstacle.x, obstacle.width);
+            }
         }
         obstacleTimer = 0;
     }
+        if (++coinTimer > 220) {
+            coinTimer = 0;
+            if (Math.random() < 0.5) spawnCoinRow();
+        }
     }
 
     // 障害物更新・描画
@@ -2069,6 +2245,8 @@ function tick() {
             // 穴に落ちたらゲームオーバー
             if (player.hasShield) {
                 player.hasShield = false;
+                poofEffect(player.x + player.width / 2, player.y + player.height / 2);
+                addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
                 obstacles.splice(i, 1);
                 playStompSound();
                 updateUI();
@@ -2087,6 +2265,10 @@ function tick() {
         if (player.alive && obstacles[i].type === 'block' && checkCollision(player, obstacles[i])) {
             // ブロックに当たったらプレイヤーを左に押し戻す
             player.x -= gameSpeed * 1.5; // ブロックの速度より少し速く押し戻す
+        }
+
+        if (obstacles[i].type === 'hole' || obstacles[i].type === 'block') {
+            rewardJumpOver(obstacles[i]);
         }
     }
 
@@ -2118,11 +2300,14 @@ function tick() {
         if (!player.alive) continue;
 
         // スターパワー中は触れるだけで敵を倒す
-        if (player.hasStarPower && checkCollision(player, enemies[i])) {
+        const enemy = enemies[i];
+        const enemyCenterX = enemy.x + enemy.width / 2;
+
+        if (player.hasStarPower && checkCollision(player, enemy)) {
             enemies.splice(i, 1);
-            score += 100; // スターパワー中はボーナス多め
+            explosionEffect(enemyCenterX, enemy.y + enemy.height / 2, 0.7);
+            addScore(100, enemyCenterX, enemy.y - 10, '#FF80AB'); // スターパワー中はボーナス多め
             playStompSound();
-            updateUI();
             continue;
         }
 
@@ -2132,11 +2317,15 @@ function tick() {
             enemies.splice(i, 1);
             // プレイヤーに跳ね返りを与える
             player.velocityY = -10;
-            // スコアボーナス
-            score += 50;
-            // 踏みつけ効果音
-            playStompSound();
-            updateUI();
+            player.isJumping = true;
+            player.stretch(1.3, 0.75);
+            player.stompCombo++;
+            stompEffect(enemyCenterX, enemy.y + enemy.height, enemy.color, enemy.width);
+            addScore(50 * Math.min(2 ** (player.stompCombo - 1), 8), enemyCenterX + 45, enemy.y - 20);
+            if (player.stompCombo >= 2) {
+                addPopup(enemyCenterX + 45, enemy.y - 45, `${player.stompCombo} COMBO!`, '#FF9800', 16);
+            }
+            playStompSound(player.stompCombo);
             continue;
         }
 
@@ -2146,6 +2335,8 @@ function tick() {
             if (player.hasShield) {
                 player.hasShield = false;
                 enemies.splice(i, 1); // 敵を消す
+                poofEffect(enemyCenterX, enemy.y + enemy.height / 2);
+                addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
                 playStompSound(); // シールド発動音
                 updateUI();
                 continue;
@@ -2157,7 +2348,10 @@ function tick() {
             stopMusic(); // 音楽停止
             gameOverAt = performance.now();
             updateUI();
+            continue;
         }
+
+        rewardJumpOver(enemy);
     }
 
     // 弾更新・描画
@@ -2174,12 +2368,15 @@ function tick() {
         if (player.alive && checkCollision(player, bullets[i])) {
             // スターパワー中は弾を消す
             if (player.hasStarPower) {
+                sparkle(bullets[i].x, bullets[i].y, '#FF80AB');
                 bullets.splice(i, 1);
                 continue;
             }
             // シールドがあれば1回防御
             if (player.hasShield) {
                 player.hasShield = false;
+                poofEffect(bullets[i].x, bullets[i].y);
+                addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
                 bullets.splice(i, 1);
                 playStompSound(); // シールド発動音
                 updateUI();
@@ -2210,6 +2407,8 @@ function tick() {
             // 爆弾をボスに向かって反射
             if (boss) {
                 bombs[i].reflectToBoss(boss);
+                sparkle(bombs[i].x + bombs[i].width / 2, bombs[i].y + bombs[i].height / 2, '#76FF03', 10);
+                addPopup(player.x + player.width / 2, player.y - 20, 'はね返し!', '#76FF03', 16);
                 playItemSound(); // 反射音
             } else {
                 // ボスがいない場合は爆弾を消す
@@ -2218,45 +2417,11 @@ function tick() {
             continue;
         }
 
-        // ボスとの衝突判定（反射された爆弾のみ）
-        if (boss && bombs[i].reflected && checkCollision(player, bombs[i])) {
-            // ボスにダメージを与える（衝突判定をbombとbossで行う）
-            if (checkCollision(boss, bombs[i])) {
-                const defeated = boss.takeDamage();
-                bombs.splice(i, 1);
-
-                if (defeated) {
-                    // ボス撃破
-                    score += 500; // スコアボーナス
-                    playBossDefeatSound();
-                    boss = null;
-                    switchBgm(bgmAfterBoss());
-                } else {
-                    // ダメージ音
-                    playStompSound();
-                }
-                updateUI();
-                continue;
-            }
-        }
-
         // ボスとの衝突判定（反射された爆弾）
         if (boss && bombs[i].reflected && checkCollision(boss, bombs[i])) {
-            const defeated = boss.takeDamage();
+            const bomb = bombs[i];
             bombs.splice(i, 1);
-
-            if (defeated) {
-                // ボス撃破
-                score += 500; // スコアボーナス
-                playBossDefeatSound();
-                boss = null;
-                switchBgm(bgmAfterBoss());
-            } else {
-                // ダメージ音
-                playStompSound();
-            }
-            updateUI();
-            continue;
+            hitBoss(bomb.x + bomb.width / 2, bomb.y + bomb.height / 2);
         }
     }
 
@@ -2272,6 +2437,11 @@ function tick() {
 
         // プレイヤーとの取得判定
         if (player.alive && checkCollision(player, items[i])) {
+            const item = items[i];
+            const label = { wing: '2だんジャンプ!', shield: 'シールド!', star: 'むてき!' }[item.type];
+            sparkle(item.x + item.width / 2, item.y + item.height / 2, '#FFFFFF', 12);
+            jumpRing(item.x + item.width / 2, item.y + item.height / 2);
+            addPopup(item.x + item.width / 2, item.y - 15, label, '#80DEEA', 18);
             if (items[i].type === 'wing') {
                 player.hasDoubleJump = true;
                 player.doubleJumpTimer = 1800; // 30秒 (60fps * 30秒)
@@ -2308,6 +2478,8 @@ function tick() {
                 // シールドがあれば1回防御
                 if (player.hasShield) {
                     player.hasShield = false;
+                    poofEffect(player.x + player.width / 2, player.y + player.height / 2);
+                    addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
                     playStompSound(); // シールド発動音
                     updateUI();
                 } else if (!player.hasStarPower) {
@@ -2324,6 +2496,23 @@ function tick() {
             }
         }
     }
+
+    for (let i = coins.length - 1; i >= 0; i--) {
+        const coin = coins[i];
+        coin.update();
+        coin.draw();
+        if (coin.isOffScreen()) {
+            coins.splice(i, 1);
+        } else if (player.alive && checkCollision(player, coin)) {
+            coins.splice(i, 1);
+            sparkle(coin.x + coin.width / 2, coin.y + coin.height / 2);
+            addScore(10, coin.x + coin.width / 2, coin.y - 8);
+            playCoinSound();
+        }
+    }
+
+    updateEffects();
+    drawEffects(view.width);
 }
 
 function drawOverlay(lines) {
@@ -2358,6 +2547,7 @@ function drawGameOver() {
 }
 
 function drawBackdrop() {
+    clearEffects();
     applyWorldTransform();
     drawSky();
     drawGround();
