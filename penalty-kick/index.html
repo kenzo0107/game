@@ -208,6 +208,7 @@
         const KEEPER_DELAY_SEC = 0.05;
         const KEEPER_DIVE_SEC = 0.45;
         const AFTER_SEC = 1.4;
+        const TRAIL_SEC = 0.5;
 
         const KEEPER_REACH_X = 0.4;
         const KEEPER_REACH_Y = 0.3;
@@ -229,6 +230,7 @@
         let aim = null;
         let shot = null;
         let lastTime = 0;
+        let trail = [];
 
         function resize() {
             const dpr = window.devicePixelRatio || 1;
@@ -708,7 +710,23 @@
             ctx.restore();
         }
 
-        function draw() {
+        function drawTrail(now) {
+            trail = trail.filter(p => now - p.t < TRAIL_SEC * 1000);
+            ctx.save();
+            ctx.lineCap = 'round';
+            for (let i = 1; i < trail.length; i++) {
+                const life = 1 - (now - trail[i].t) / (TRAIL_SEC * 1000);
+                ctx.strokeStyle = `rgba(255, 255, 255, ${(life * 0.8).toFixed(3)})`;
+                ctx.lineWidth = 2 + life * 10;
+                ctx.beginPath();
+                ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+                ctx.lineTo(trail[i].x, trail[i].y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function draw(now) {
             ctx.clearRect(0, 0, view.w, view.h);
             drawField();
 
@@ -730,13 +748,14 @@
 
             drawKicker();
             if (!ballInFlight && !ballBehindNet) drawBall(ball);
+            drawTrail(now);
         }
 
         function loop(now) {
             const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0;
             lastTime = now;
             update(dt);
-            draw();
+            draw(now);
             requestAnimationFrame(loop);
         }
 
@@ -746,11 +765,14 @@
             if (phase !== 'ready') return;
             canvas.setPointerCapture(e.pointerId);
             swipe = { id: e.pointerId, x: e.clientX, y: e.clientY };
+            trail = [{ x: e.clientX, y: e.clientY, t: e.timeStamp }];
             aim = null;
         });
 
         canvas.addEventListener('pointermove', e => {
             if (!swipe || e.pointerId !== swipe.id) return;
+            const points = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+            (points.length ? points : [e]).forEach(p => trail.push({ x: p.clientX, y: p.clientY, t: p.timeStamp }));
             aim = aimFromSwipe(e.clientX - swipe.x, e.clientY - swipe.y);
         });
 
