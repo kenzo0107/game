@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a0638"/>
+      <stop offset="1" stop-color="#3d0f5e"/>
+    </linearGradient>
+    <linearGradient id="lane" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b8743a"/>
+      <stop offset="1" stop-color="#f0c27f"/>
+    </linearGradient>
+    <radialGradient id="ball" cx=".35" cy=".3" r=".75">
+      <stop offset="0" stop-color="#7ef3ff"/>
+      <stop offset=".45" stop-color="#3a3aff"/>
+      <stop offset="1" stop-color="#14064a"/>
+    </radialGradient>
+    <radialGradient id="flash" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff7c2"/>
+      <stop offset=".5" stop-color="#ffd23f" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#ff3ea5" stop-opacity="0"/>
+    </radialGradient>
+    <g id="pin">
+      <path d="M0 -22 C6 -22 7 -14 4 -9 C10 -2 10 10 6 20 L-6 20 C-10 10 -10 -2 -4 -9 C-7 -14 -6 -22 0 -22 Z" fill="#fff" stroke="#1a0638" stroke-width="2"/>
+      <rect x="-5" y="-13" width="10" height="2.5" fill="#ff2a4a"/>
+      <rect x="-5.5" y="-9.5" width="11" height="2.5" fill="#ff2a4a"/>
+    </g>
+  </defs>
+  <rect width="320" height="180" fill="url(#bg)"/>
+  <g stroke="#ff3ea5" stroke-width="2" opacity=".5">
+    <line x1="0" y1="30" x2="320" y2="30"/>
+    <line x1="0" y1="36" x2="320" y2="36" stroke="#29e7ff"/>
+  </g>
+  <path d="M128 64 H192 L270 180 H50 Z" fill="#0b0320"/>
+  <path d="M134 64 H186 L250 180 H70 Z" fill="url(#lane)"/>
+  <g stroke="#a0622c" stroke-width="1" opacity=".6">
+    <line x1="147" y1="64" x2="115" y2="180"/>
+    <line x1="160" y1="64" x2="160" y2="180"/>
+    <line x1="173" y1="64" x2="205" y2="180"/>
+  </g>
+  <g fill="#1a0638" opacity=".7">
+    <path d="M130 150 l4 -8 l4 8 Z"/><path d="M156 150 l4 -8 l4 8 Z"/><path d="M182 150 l4 -8 l4 8 Z"/>
+  </g>
+  <circle cx="160" cy="66" r="62" fill="url(#flash)"/>
+  <path d="M160 18 L168 50 L200 30 L180 58 L214 66 L180 74 L198 102 L168 84 L160 114 L152 84 L122 102 L140 74 L106 66 L140 58 L120 30 L152 50 Z" fill="#ffd23f" opacity=".85"/>
+  <use href="#pin" transform="translate(116 46) rotate(-48) scale(.9)"/>
+  <use href="#pin" transform="translate(204 40) rotate(52) scale(.9)"/>
+  <use href="#pin" transform="translate(140 26) rotate(-18) scale(.8)"/>
+  <use href="#pin" transform="translate(182 22) rotate(26) scale(.8)"/>
+  <use href="#pin" transform="translate(96 82) rotate(-80) scale(.85)"/>
+  <use href="#pin" transform="translate(226 78) rotate(86) scale(.85)"/>
+  <use href="#pin" transform="translate(160 54) rotate(8)"/>
+  <g stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".7">
+    <line x1="146" y1="168" x2="150" y2="150"/>
+    <line x1="176" y1="168" x2="172" y2="150"/>
+    <line x1="161" y1="176" x2="161" y2="156"/>
+  </g>
+  <circle cx="161" cy="122" r="26" fill="url(#ball)" stroke="#0b0320" stroke-width="3"/>
+  <g fill="#0b0320">
+    <circle cx="152" cy="112" r="4"/><circle cx="164" cy="108" r="4"/><circle cx="160" cy="122" r="5"/>
+  </g>
+  <text x="160" y="22" text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-weight="900" font-size="20" fill="#ffd23f" stroke="#ff3ea5" stroke-width="2" paint-order="stroke" letter-spacing="2">STRIKE!</text>
+</svg>

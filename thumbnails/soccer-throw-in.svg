@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b5f8a"/>
+      <stop offset="1" stop-color="#5fd8ff"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffd23f" stop-opacity=".1"/>
+      <stop offset="1" stop-color="#ffd23f"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="180" fill="url(#sky)"/>
+  <rect y="54" width="320" height="18" fill="#0a3550"/>
+  <g fill="#fff" opacity=".35">
+    <rect x="10" y="58" width="300" height="2"/>
+    <rect x="10" y="64" width="300" height="2"/>
+  </g>
+  <rect y="72" width="320" height="108" fill="#1f9a46"/>
+  <g fill="#27b354">
+    <path d="M0 72 H20 L-30 180 H-80 Z"/>
+    <path d="M60 72 H100 L80 180 H10 Z"/>
+    <path d="M140 72 H180 L190 180 H120 Z"/>
+    <path d="M220 72 H260 L300 180 H230 Z"/>
+    <path d="M300 72 H340 L400 180 H330 Z"/>
+  </g>
+  <path d="M0 150 L320 96" stroke="#fff" stroke-width="5"/>
+  <g stroke="#fff" stroke-width="2" opacity=".85">
+    <path d="M150 128 l6 -2 M200 120 l6 -2 M250 111 l6 -2 M300 103 l6 -2"/>
+  </g>
+  <g font-family="Arial Black, Impact, sans-serif" font-weight="900" font-size="10" fill="#fff" opacity=".9">
+    <text x="146" y="142">10m</text>
+    <text x="196" y="134">20m</text>
+    <text x="246" y="125">30m</text>
+  </g>
+  <path d="M78 40 Q190 -30 288 98" fill="none" stroke="url(#glow)" stroke-width="4" stroke-dasharray="3 7" stroke-linecap="round"/>
+  <ellipse cx="288" cy="102" rx="20" ry="6" fill="none" stroke="#ffd23f" stroke-width="3"/>
+  <ellipse cx="288" cy="102" rx="10" ry="3" fill="#ffd23f" opacity=".6"/>
+  <g stroke="#0b1d4a" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M84 78 L90 116"/>
+    <path d="M90 116 L74 150"/>
+    <path d="M90 116 L104 150"/>
+    <path d="M85 84 L70 56 L74 42"/>
+    <path d="M85 84 L92 56 L86 42"/>
+  </g>
+  <g stroke="#ff3ea5" stroke-width="6" stroke-linecap="round">
+    <path d="M84 80 L89 112"/>
+  </g>
+  <circle cx="82" cy="68" r="9" fill="#f5c99b" stroke="#0b1d4a" stroke-width="3"/>
+  <g transform="translate(80 34)">
+    <circle r="12" fill="#fff" stroke="#0b1d4a" stroke-width="2.5"/>
+    <path d="M0 -4.5 L4.5 -1.4 L2.8 4 L-2.8 4 L-4.5 -1.4 Z" fill="#0b1d4a"/>
+    <path d="M0 -4.5 V-11 M4.5 -1.4 L11 -3.5 M2.8 4 L6.5 10 M-2.8 4 L-6.5 10 M-4.5 -1.4 L-11 -3.5" stroke="#0b1d4a" stroke-width="1.8"/>
+  </g>
+  <g stroke="#ffd23f" stroke-width="3" stroke-linecap="round">
+    <line x1="62" y1="22" x2="54" y2="14"/>
+    <line x1="98" y1="22" x2="106" y2="14"/>
+    <line x1="80" y1="16" x2="80" y2="6"/>
+  </g>
+</svg>

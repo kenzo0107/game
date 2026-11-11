@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#140840"/>
+      <stop offset=".5" stop-color="#6a1b9a"/>
+      <stop offset=".8" stop-color="#ff3ea5"/>
+      <stop offset="1" stop-color="#ffb02e"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff07a"/>
+      <stop offset="1" stop-color="#ff5f8a"/>
+    </linearGradient>
+    <linearGradient id="jet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#9fb0d8"/>
+    </linearGradient>
+    <linearGradient id="trail" x1="1" y1="0" x2="0" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="sunMask">
+      <circle cx="232" cy="126" r="54" fill="#fff"/>
+      <rect x="170" y="100" width="130" height="3" fill="#000"/>
+      <rect x="170" y="109" width="130" height="4" fill="#000"/>
+      <rect x="170" y="118" width="130" height="5" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="320" height="180" fill="url(#sky)"/>
+  <g fill="#fff">
+    <rect x="22" y="14" width="2" height="2"/>
+    <rect x="70" y="30" width="2" height="2" opacity=".7"/>
+    <rect x="118" y="10" width="2" height="2"/>
+    <rect x="160" y="34" width="2" height="2" opacity=".6"/>
+    <rect x="210" y="16" width="2" height="2"/>
+    <rect x="290" y="28" width="2" height="2" opacity=".8"/>
+    <rect x="40" y="52" width="2" height="2" opacity=".5"/>
+  </g>
+  <rect x="170" y="70" width="130" height="60" fill="url(#sun)" mask="url(#sunMask)"/>
+  <g fill="#ffd1e8" opacity=".35">
+    <rect x="20" y="78" width="90" height="8" rx="4"/>
+    <rect x="44" y="90" width="60" height="6" rx="3"/>
+    <rect x="250" y="60" width="60" height="6" rx="3"/>
+  </g>
+  <path d="M0 130 L34 104 L58 118 L92 90 L128 122 L150 112 L176 130 Z" fill="#2a0f5c"/>
+  <path d="M210 130 L246 108 L268 120 L300 98 L320 112 L320 130 Z" fill="#2a0f5c"/>
+  <rect y="130" width="320" height="50" fill="#12052e"/>
+  <g stroke="#ff3ea5" stroke-width="1.5" opacity=".7">
+    <line x1="0" y1="134" x2="320" y2="134"/>
+    <line x1="0" y1="141" x2="320" y2="141"/>
+    <line x1="0" y1="151" x2="320" y2="151"/>
+    <line x1="0" y1="165" x2="320" y2="165"/>
+    <line x1="160" y1="130" x2="-80" y2="180"/>
+    <line x1="160" y1="130" x2="0" y2="180"/>
+    <line x1="160" y1="130" x2="80" y2="180"/>
+    <line x1="160" y1="130" x2="160" y2="180"/>
+    <line x1="160" y1="130" x2="240" y2="180"/>
+    <line x1="160" y1="130" x2="320" y2="180"/>
+    <line x1="160" y1="130" x2="400" y2="180"/>
+  </g>
+  <g transform="translate(150 78) rotate(-16)">
+    <rect x="-200" y="-3" width="150" height="4" fill="url(#trail)"/>
+    <rect x="-170" y="6" width="120" height="2" fill="url(#trail)" opacity=".6"/>
+    <path d="M-58 -2 L-92 1.5 L-58 5 Z" fill="#ffd23f"/>
+    <path d="M-58 -1 L-76 1.5 L-58 4 Z" fill="#fff"/>
+    <g stroke="#1a1240" stroke-width="2" stroke-linejoin="round">
+      <path d="M-56 -4 L-70 -28 L-54 -28 L-34 -6 Z" fill="#c9d3ee"/>
+      <path d="M-12 2 L-44 30 L-28 30 L18 5 Z" fill="#b6c1e2"/>
+      <path d="M-58 -5 L30 -9 Q60 -7 76 0 Q60 6 30 7 L-58 7 Z" fill="url(#jet)"/>
+      <path d="M12 -8 Q30 -19 48 -6 Z" fill="#29e7ff"/>
+      <path d="M-54 4 L-72 15 L-58 15 L-42 6 Z" fill="#b6c1e2"/>
+    </g>
+    <rect x="-40" y="-2" width="44" height="3" fill="#ff3ea5"/>
+  </g>
+  <g stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".5">
+    <line x1="10" y1="62" x2="56" y2="62"/>
+    <line x1="24" y1="150" x2="64" y2="150"/>
+    <line x1="270" y1="80" x2="306" y2="80"/>
+  </g>
+</svg>

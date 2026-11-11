@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#050a2a"/>
+      <stop offset="1" stop-color="#16306b"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="trail" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffd23f" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ffd23f" stop-opacity=".9"/>
+    </linearGradient>
+    <pattern id="net" width="10" height="10" patternUnits="userSpaceOnUse">
+      <path d="M0 0 L10 10 M10 0 L0 10" stroke="#fff" stroke-width=".8" opacity=".35"/>
+    </pattern>
+  </defs>
+  <rect width="320" height="180" fill="url(#night)"/>
+  <path d="M10 0 L-40 180 L120 180 Z" fill="url(#beam)" opacity=".5"/>
+  <path d="M310 0 L200 180 L360 180 Z" fill="url(#beam)" opacity=".5"/>
+  <g fill="#fff">
+    <circle cx="10" cy="6" r="6"/><circle cx="310" cy="6" r="6"/>
+  </g>
+  <rect y="40" width="320" height="34" fill="#0d1c47"/>
+  <g fill="#ff3ea5" opacity=".5">
+    <circle cx="14" cy="50" r="2"/><circle cx="34" cy="58" r="2"/><circle cx="54" cy="48" r="2"/><circle cx="76" cy="60" r="2"/>
+    <circle cx="96" cy="52" r="2"/><circle cx="226" cy="54" r="2"/><circle cx="246" cy="46" r="2"/><circle cx="268" cy="60" r="2"/>
+    <circle cx="290" cy="50" r="2"/><circle cx="308" cy="62" r="2"/>
+  </g>
+  <g fill="#29e7ff" opacity=".5">
+    <circle cx="24" cy="66" r="2"/><circle cx="64" cy="66" r="2"/><circle cx="86" cy="46" r="2"/>
+    <circle cx="236" cy="66" r="2"/><circle cx="280" cy="68" r="2"/><circle cx="300" cy="42" r="2"/>
+  </g>
+  <rect y="74" width="320" height="106" fill="#1c8a3c"/>
+  <g fill="#23a148">
+    <path d="M0 74 H40 L20 180 H-40 Z"/>
+    <path d="M80 74 H120 L120 180 H60 Z"/>
+    <path d="M160 74 H200 L220 180 H160 Z"/>
+    <path d="M240 74 H280 L320 180 H260 Z"/>
+  </g>
+  <path d="M30 128 H290" stroke="#fff" stroke-width="3" opacity=".9"/>
+  <rect x="62" y="34" width="196" height="94" fill="url(#net)"/>
+  <path d="M62 128 V34 H258 V128" fill="none" stroke="#fff" stroke-width="7" stroke-linejoin="round"/>
+  <g stroke="#ffd23f" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M150 108 L132 86"/>
+    <path d="M132 86 L104 66"/>
+    <path d="M128 80 L98 56"/>
+    <path d="M150 108 L170 124"/>
+    <path d="M150 108 L158 128"/>
+  </g>
+  <circle cx="122" cy="72" r="9" fill="#f5c99b" stroke="#0b0820" stroke-width="3"/>
+  <g fill="#0b0820">
+    <circle cx="96" cy="54" r="5"/>
+    <circle cx="102" cy="64" r="5"/>
+  </g>
+  <path d="M168 176 L228 66 L240 70 L178 178 Z" fill="url(#trail)"/>
+  <g transform="translate(236 62)">
+    <circle r="13" fill="#fff" stroke="#0b0820" stroke-width="2.5"/>
+    <path d="M0 -5 L5 -1.5 L3 4.5 L-3 4.5 L-5 -1.5 Z" fill="#0b0820"/>
+    <path d="M0 -5 V-12 M5 -1.5 L12 -4 M3 4.5 L7 11 M-3 4.5 L-7 11 M-5 -1.5 L-12 -4" stroke="#0b0820" stroke-width="2"/>
+  </g>
+  <g stroke="#ffd23f" stroke-width="3" stroke-linecap="round">
+    <line x1="256" y1="44" x2="268" y2="34"/>
+    <line x1="260" y1="62" x2="276" y2="60"/>
+    <line x1="252" y1="76" x2="264" y2="86"/>
+  </g>
+</svg>
