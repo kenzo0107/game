@@ -1,7 +1,7 @@
 // ゲーム定数
 const ARENA_AREA = 800 * 600; // 盤面の向きを画面に合わせても、塗る総面積（難易度）は変えない
 const GRID_SIZE = 10;
-const GAME_DURATION = 60; // 秒
+const GAME_DURATION = 30; // 秒
 const PLAYER_SPEED = 1.5; // それ以外のエリアでは少し遅く
 const PLAYER_SPEED_BOOST = 4; // 自分の色の上では速く移動
 const CPU_SPEED = 1.5;
