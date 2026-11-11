@@ -14,6 +14,11 @@ const ITEM_SIZE = 20;
 const ITEM_SPAWN_INTERVAL = 5000; // アイテム生成間隔（ミリ秒）
 const SPECIAL_DURATION = 5000; // 必殺技持続時間（ミリ秒）
 const SPECIAL_GAUGE_PER_ITEM = 50; // 1つのアイテムで増加するゲージ量
+const FRAME_MS = 1000 / 60; // 速度定数は 60fps の1フレームあたりの移動量で定義している
+const MAX_FRAME_STEP = 3; // タブ復帰直後などに一気にワープしないよう上限を設ける
+const CPU_RETARGET_MS = 2000;
+const STICK_RADIUS = 50; // CSS px
+const STICK_DEAD_ZONE = 0.12;
 
 // 色定義
 enum CellOwner {
@@ -56,6 +61,8 @@ class Game {
     private specialGauge: number;
     private specialActive: boolean;
     private specialEndTime: number;
+    private stick: Position = { x: 0, y: 0 };
+    private lastFrameTime = 0;
 
     constructor() {
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -116,6 +123,7 @@ class Game {
 
                 if (!this.gameRunning) {
                     // ゲーム開始前ならゲームを開始
+                    this.resetGame();
                     this.startGame();
                 } else {
                     // ゲーム中なら必殺技発動
@@ -128,19 +136,88 @@ class Game {
             this.keys.delete(e.key.toLowerCase());
         });
 
+        // 指を離したイベントを取りこぼすと押しっぱなしになるため、フォーカスを失ったら入力を捨てる
+        window.addEventListener('blur', () => {
+            this.keys.clear();
+            this.releaseStick();
+        });
+
+        this.setupStick();
+
+        const specialBtn = document.getElementById('specialBtn')!;
+        specialBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            this.activateSpecial();
+        });
+        specialBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
         // ボタンイベント
         document.getElementById('startBtn')?.addEventListener('click', () => {
             this.startGame();
         });
 
-        document.getElementById('resetBtn')?.addEventListener('click', () => {
-            this.resetGame();
-        });
-
         document.getElementById('playAgainBtn')?.addEventListener('click', () => {
             this.resetGame();
-            this.hideGameOver();
+            this.startGame();
         });
+    }
+
+    private setupStick(): void {
+        const zone = document.getElementById('stickZone')!;
+        let activePointer: number | null = null;
+        let origin: Position = { x: 0, y: 0 };
+
+        const move = (e: PointerEvent) => {
+            let dx = (e.clientX - origin.x) / STICK_RADIUS;
+            let dy = (e.clientY - origin.y) / STICK_RADIUS;
+            const length = Math.hypot(dx, dy);
+            if (length > 1) {
+                dx /= length;
+                dy /= length;
+            }
+            this.setStickKnob(dx * STICK_RADIUS * 0.6, dy * STICK_RADIUS * 0.6);
+            this.stick = Math.hypot(dx, dy) < STICK_DEAD_ZONE ? { x: 0, y: 0 } : { x: dx, y: dy };
+        };
+
+        const release = (e: PointerEvent) => {
+            if (e.pointerId !== activePointer) return;
+            activePointer = null;
+            this.releaseStick();
+        };
+
+        // 固定位置のスティックだと親指の置き場所がずれて誤操作しやすいため、触れた位置をスティックの中心にする
+        zone.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            activePointer = e.pointerId;
+            origin = { x: e.clientX, y: e.clientY };
+            const rect = zone.getBoundingClientRect();
+            this.setStickBase(e.clientX - rect.left, e.clientY - rect.top);
+            move(e);
+            zone.setPointerCapture(e.pointerId);
+        });
+        zone.addEventListener('pointermove', (e) => {
+            if (e.pointerId === activePointer) move(e);
+        });
+        zone.addEventListener('pointerup', release);
+        zone.addEventListener('pointercancel', release);
+    }
+
+    private setStickBase(left: number, top: number): void {
+        const base = document.getElementById('stickBase')!;
+        base.style.left = `${left}px`;
+        base.style.top = `${top}px`;
+    }
+
+    private setStickKnob(dx: number, dy: number): void {
+        document.getElementById('stickKnob')!.style.transform = `translate(${dx}px, ${dy}px)`;
+    }
+
+    private releaseStick(): void {
+        this.stick = { x: 0, y: 0 };
+        this.setStickKnob(0, 0);
+        const base = document.getElementById('stickBase')!;
+        base.style.left = '';
+        base.style.top = '';
     }
 
     public startGame(): void {
@@ -150,11 +227,8 @@ class Game {
         this.timeLeft = GAME_DURATION;
         this.updateTimer();
 
-        // ボタン状態更新
-        const startBtn = document.getElementById('startBtn') as HTMLButtonElement;
-        const resetBtn = document.getElementById('resetBtn') as HTMLButtonElement;
-        startBtn.disabled = true;
-        resetBtn.disabled = false;
+        document.getElementById('startOverlay')!.classList.remove('show');
+        this.hideGameOver();
 
         // タイマー開始
         this.timerInterval = window.setInterval(() => {
@@ -173,7 +247,8 @@ class Game {
         }, ITEM_SPAWN_INTERVAL);
 
         // ゲームループ開始
-        this.gameLoop();
+        this.lastFrameTime = performance.now();
+        this.animationId = requestAnimationFrame(this.gameLoop);
     }
 
     private resetGame(): void {
@@ -191,6 +266,8 @@ class Game {
         this.gameRunning = false;
         this.timeLeft = GAME_DURATION;
         this.keys.clear();
+        this.releaseStick();
+        this.cpuTarget = null;
 
         // プレイヤー位置リセット
         this.player.x = CANVAS_WIDTH * 0.25;
@@ -211,29 +288,28 @@ class Game {
         this.updateTimer();
         this.updateScores();
         this.updateSpecialGaugeUI();
-        const startBtn = document.getElementById('startBtn') as HTMLButtonElement;
-        const resetBtn = document.getElementById('resetBtn') as HTMLButtonElement;
-        startBtn.disabled = false;
-        resetBtn.disabled = true;
 
         this.draw();
     }
 
-    private gameLoop = (): void => {
+    private gameLoop = (now: number): void => {
         if (!this.gameRunning) return;
 
-        this.update();
+        const frames = Math.min((now - this.lastFrameTime) / FRAME_MS, MAX_FRAME_STEP);
+        this.lastFrameTime = now;
+
+        this.update(frames);
         this.draw();
 
         this.animationId = requestAnimationFrame(this.gameLoop);
     };
 
-    private update(): void {
+    private update(frames: number): void {
         // プレイヤー移動
-        this.updatePlayerPosition();
+        this.updatePlayerPosition(frames);
 
         // CPU移動（簡易AI）
-        this.updateCPUPosition();
+        this.updateCPUPosition(frames);
 
         // アイテム取得判定
         this.checkItemCollision();
@@ -252,29 +328,33 @@ class Game {
         this.updateScores();
     }
 
-    private updatePlayerPosition(): void {
-        let dx = 0;
-        let dy = 0;
+    private readMoveInput(): Position {
+        let x = this.stick.x;
+        let y = this.stick.y;
 
+        // WASD または 矢印キー
+        if (this.keys.has('w') || this.keys.has('arrowup')) y -= 1;
+        if (this.keys.has('s') || this.keys.has('arrowdown')) y += 1;
+        if (this.keys.has('a') || this.keys.has('arrowleft')) x -= 1;
+        if (this.keys.has('d') || this.keys.has('arrowright')) x += 1;
+
+        // 斜め移動の速度調整
+        const length = Math.hypot(x, y);
+        return length > 1 ? { x: x / length, y: y / length } : { x, y };
+    }
+
+    private updatePlayerPosition(frames: number): void {
         // 現在のグリッド位置を確認
         const gridX = Math.floor(this.player.x / GRID_SIZE);
         const gridY = Math.floor(this.player.y / GRID_SIZE);
         const isOnOwnColor = this.grid[gridY]?.[gridX] === CellOwner.PLAYER;
 
         // 自分の色の上なら速度アップ
-        const speed = isOnOwnColor ? PLAYER_SPEED_BOOST : PLAYER_SPEED;
+        const speed = (isOnOwnColor ? PLAYER_SPEED_BOOST : PLAYER_SPEED) * frames;
 
-        // WASD または 矢印キー
-        if (this.keys.has('w') || this.keys.has('arrowup')) dy -= speed;
-        if (this.keys.has('s') || this.keys.has('arrowdown')) dy += speed;
-        if (this.keys.has('a') || this.keys.has('arrowleft')) dx -= speed;
-        if (this.keys.has('d') || this.keys.has('arrowright')) dx += speed;
-
-        // 斜め移動の速度調整
-        if (dx !== 0 && dy !== 0) {
-            dx *= 0.707;
-            dy *= 0.707;
-        }
+        const input = this.readMoveInput();
+        const dx = input.x * speed;
+        const dy = input.y * speed;
 
         this.player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_SIZE, this.player.x + dx));
         this.player.y = Math.max(0, Math.min(CANVAS_HEIGHT - PLAYER_SIZE, this.player.y + dy));
@@ -283,10 +363,10 @@ class Game {
     private cpuTarget: Position | null = null;
     private cpuTargetTimer = 0;
 
-    private updateCPUPosition(): void {
+    private updateCPUPosition(frames: number): void {
         // 一定時間ごとにランダムな目標地点を設定
-        this.cpuTargetTimer++;
-        if (!this.cpuTarget || this.cpuTargetTimer > 120) {
+        this.cpuTargetTimer += frames * FRAME_MS;
+        if (!this.cpuTarget || this.cpuTargetTimer > CPU_RETARGET_MS) {
             this.cpuTarget = {
                 x: Math.random() * (CANVAS_WIDTH - PLAYER_SIZE),
                 y: Math.random() * (CANVAS_HEIGHT - PLAYER_SIZE)
@@ -300,7 +380,7 @@ class Game {
         const isOnOwnColor = this.grid[gridY]?.[gridX] === CellOwner.CPU;
 
         // 自分の色の上なら速度アップ
-        const speed = isOnOwnColor ? CPU_SPEED_BOOST : CPU_SPEED;
+        const speed = (isOnOwnColor ? CPU_SPEED_BOOST : CPU_SPEED) * frames;
 
         // 目標地点に向かって移動
         const dx = this.cpuTarget.x - this.cpu.x;
@@ -474,10 +554,16 @@ class Game {
 
         document.getElementById('playerScore')!.textContent = playerPercent;
         document.getElementById('cpuScore')!.textContent = cpuPercent;
+
+        const playerShare = totalCells ? (playerCells / total) * 100 : 50;
+        const cpuShare = totalCells ? (cpuCells / total) * 100 : 50;
+        document.getElementById('playerTurf')!.style.width = `${playerShare}%`;
+        document.getElementById('cpuTurf')!.style.width = `${cpuShare}%`;
     }
 
     private updateTimer(): void {
         document.getElementById('timer')!.textContent = this.timeLeft.toString();
+        document.getElementById('timerBox')!.classList.toggle('hurry', this.timeLeft <= 10);
     }
 
     private endGame(): void {
@@ -504,12 +590,6 @@ class Game {
 
         // 結果表示
         this.showGameOver(playerCells, cpuCells);
-
-        // ボタン状態更新
-        const startBtn = document.getElementById('startBtn') as HTMLButtonElement;
-        const resetBtn = document.getElementById('resetBtn') as HTMLButtonElement;
-        startBtn.disabled = false;
-        resetBtn.disabled = false;
     }
 
     private showGameOver(playerCells: number, cpuCells: number): void {
@@ -580,26 +660,20 @@ class Game {
     }
 
     private updateSpecialGaugeUI(): void {
-        const gaugeFill = document.getElementById('specialGauge')!;
-        const hint = document.getElementById('specialHint')!;
+        const button = document.getElementById('specialBtn')!;
+        const label = document.getElementById('specialLabel')!;
+        const ready = !this.specialActive && this.specialGauge >= 100;
 
-        gaugeFill.style.width = `${this.specialGauge}%`;
-        gaugeFill.textContent = `${this.specialGauge}%`;
+        button.style.setProperty('--gauge', `${this.specialGauge}`);
+        button.classList.toggle('ready', ready);
+        button.classList.toggle('special-active', this.specialActive);
 
         if (this.specialActive) {
-            gaugeFill.classList.remove('ready');
-            gaugeFill.classList.add('special-active');
-            hint.textContent = '⚡ 必殺技発動中！';
-            hint.classList.remove('ready');
-        } else if (this.specialGauge >= 100) {
-            gaugeFill.classList.add('ready');
-            gaugeFill.classList.remove('special-active');
-            hint.textContent = '✨ スペースキーで必殺技発動！';
-            hint.classList.add('ready');
+            label.textContent = '発動中';
+        } else if (ready) {
+            label.textContent = 'タップ！';
         } else {
-            gaugeFill.classList.remove('ready', 'special-active');
-            hint.textContent = 'アイテムを集めてゲージを貯めよう！';
-            hint.classList.remove('ready');
+            label.innerHTML = `SP<br>${this.specialGauge}%`;
         }
     }
 

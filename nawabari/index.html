@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1e1b4b">
     <title>ナワバリバトル</title>
     <style>
         * {
@@ -11,281 +12,327 @@
             box-sizing: border-box;
         }
 
+        html,
         body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif;
+            background: linear-gradient(160deg, #312e81 0%, #1e1b4b 100%);
+            color: white;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .app {
+            height: 100dvh;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto minmax(0, 1fr) minmax(170px, 34dvh);
+            grid-template-areas:
+                "hud hud"
+                "field field"
+                "stick special";
+            gap: 8px;
+            padding:
+                max(8px, env(safe-area-inset-top))
+                max(8px, env(safe-area-inset-right))
+                max(8px, env(safe-area-inset-bottom))
+                max(8px, env(safe-area-inset-left));
+        }
+
+        @media (orientation: landscape) and (max-height: 600px) {
+            .app {
+                grid-template-columns: minmax(120px, 1fr) 3fr minmax(120px, 1fr);
+                grid-template-rows: auto minmax(0, 1fr);
+                grid-template-areas:
+                    "hud hud hud"
+                    "stick field special";
+            }
+        }
+
+        .hud {
+            grid-area: hud;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
+            flex-direction: column;
+            gap: 4px;
         }
 
-        .game-container {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 900px;
-        }
-
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 2.5em;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .info-panel {
+        .hud-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f7f7f7;
-            border-radius: 10px;
-        }
-
-        .score {
-            font-size: 1.2em;
+            align-items: baseline;
             font-weight: bold;
+            font-variant-numeric: tabular-nums;
         }
 
         .player-score {
-            color: #3b82f6;
+            color: #93c5fd;
         }
 
         .cpu-score {
-            color: #ef4444;
+            color: #fca5a5;
         }
 
         .timer {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #333;
+            font-size: 1.4em;
+        }
+
+        .timer.hurry {
+            color: #fbbf24;
+        }
+
+        .turf {
+            display: flex;
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+            background: #475569;
+        }
+
+        .turf-player,
+        .turf-cpu {
+            width: 50%;
+            transition: width 0.2s;
+        }
+
+        .turf-player {
+            background: #3b82f6;
+        }
+
+        .turf-cpu {
+            background: #ef4444;
+        }
+
+        .field {
+            grid-area: field;
+            position: relative;
+            container-type: size;
+            display: grid;
+            place-items: center;
+            min-height: 0;
+        }
+
+        .board {
+            position: relative;
+            width: min(100cqw, 100cqh * 4 / 3);
+            aspect-ratio: 4 / 3;
         }
 
         canvas {
-            border: 4px solid #333;
-            border-radius: 10px;
+            width: 100%;
+            height: 100%;
             display: block;
-            margin: 0 auto;
-            background: #e0e0e0;
-        }
-
-        .controls {
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            font-size: 1.1em;
-            border-radius: 8px;
-            cursor: pointer;
-            margin: 0 10px;
-            transition: all 0.3s;
-        }
-
-        button:hover {
-            background: #764ba2;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .instructions {
-            margin-top: 20px;
-            padding: 15px;
-            background: #f0f9ff;
+            border: 3px solid #0f172a;
             border-radius: 10px;
-            text-align: center;
-        }
-
-        .instructions h3 {
-            margin-bottom: 10px;
-            color: #333;
-        }
-
-        .instructions p {
-            color: #666;
-            line-height: 1.6;
-        }
-
-        .game-over {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .game-over.show {
-            display: flex;
-        }
-
-        .game-over-content {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            text-align: center;
-            max-width: 400px;
-        }
-
-        .game-over-content h2 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-        }
-
-        .win {
-            color: #10b981;
-        }
-
-        .lose {
-            color: #ef4444;
-        }
-
-        .draw {
-            color: #f59e0b;
-        }
-
-        .special-gauge-container {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .special-gauge-label {
-            font-size: 1.1em;
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #333;
-        }
-
-        .special-gauge-bar {
-            width: 100%;
-            height: 30px;
             background: #e0e0e0;
-            border-radius: 15px;
-            overflow: hidden;
-            border: 3px solid #333;
-            position: relative;
         }
 
-        .special-gauge-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #fbbf24, #f59e0b);
-            width: 0%;
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
+        .overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
             justify-content: center;
-            font-weight: bold;
-            color: white;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 10px;
         }
 
-        .special-gauge-fill.ready {
-            background: linear-gradient(90deg, #10b981, #059669);
-            animation: pulse 1s infinite;
+        .overlay.show {
+            display: flex;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+        .overlay h1,
+        .overlay h2 {
+            font-size: 1.8em;
         }
 
-        .special-active {
-            background: rgba(251, 191, 36, 0.2);
-            animation: flash 0.5s infinite;
-        }
-
-        @keyframes flash {
-            0%, 100% { background: rgba(251, 191, 36, 0.2); }
-            50% { background: rgba(251, 191, 36, 0.4); }
+        .overlay p {
+            line-height: 1.6;
+            color: #cbd5e1;
+            font-size: 0.95em;
         }
 
         .key-hint {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 5px;
+            display: none;
         }
 
-        .key-hint.ready {
-            color: #10b981;
+        @media (hover: hover) and (pointer: fine) {
+            .key-hint {
+                display: block;
+            }
+        }
+
+        .overlay button {
+            background: #f59e0b;
+            color: #1e1b4b;
+            border: none;
+            padding: 14px 40px;
+            font-size: 1.2em;
             font-weight: bold;
-            animation: blink 1s infinite;
+            border-radius: 999px;
+            cursor: pointer;
         }
 
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .overlay button:active {
+            transform: scale(0.96);
+        }
+
+        .win {
+            color: #34d399;
+        }
+
+        .lose {
+            color: #f87171;
+        }
+
+        .draw {
+            color: #fbbf24;
+        }
+
+        .stick-zone {
+            grid-area: stick;
+            position: relative;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.06);
+            overflow: hidden;
+        }
+
+        .stick-zone-label {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 8px;
+            text-align: center;
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+        }
+
+        .stick-base {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 100px;
+            height: 100px;
+            margin: -50px 0 0 -50px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.08);
+            display: grid;
+            place-items: center;
+            pointer-events: none;
+        }
+
+        .stick-knob {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(147, 197, 253, 0.85);
+        }
+
+        .special-btn {
+            grid-area: special;
+            align-self: center;
+            justify-self: center;
+            width: min(110px, 80%);
+            aspect-ratio: 1;
+            border-radius: 50%;
+            border: none;
+            background: conic-gradient(#f59e0b calc(var(--gauge, 0) * 1%), #334155 0);
+            display: grid;
+            place-items: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1em;
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        .special-btn span {
+            width: 84%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            background: #1e1b4b;
+            display: grid;
+            place-items: center;
+            line-height: 1.2;
+            pointer-events: none;
+        }
+
+        .special-btn.ready {
+            background: #10b981;
+            animation: pulse 0.8s infinite alternate;
+        }
+
+        .special-btn.special-active {
+            background: #fbbf24;
+            animation: pulse 0.25s infinite alternate;
+        }
+
+        @keyframes pulse {
+            to {
+                transform: scale(1.08);
+            }
         }
     </style>
 </head>
 <body>
-    <div class="game-container">
-        <h1>🎮 ナワバリバトル</h1>
-
-        <div class="info-panel">
-            <div class="score player-score">
-                プレイヤー: <span id="playerScore">0</span>%
+    <div class="app">
+        <header class="hud">
+            <div class="hud-row">
+                <span class="player-score">あなた <span id="playerScore">0</span>%</span>
+                <span class="timer" id="timerBox"><span id="timer">60</span></span>
+                <span class="cpu-score"><span id="cpuScore">0</span>% CPU</span>
             </div>
-            <div class="timer">
-                残り時間: <span id="timer">60</span>秒
+            <div class="turf">
+                <div class="turf-player" id="playerTurf"></div>
+                <div class="turf-cpu" id="cpuTurf"></div>
             </div>
-            <div class="score cpu-score">
-                コンピュータ: <span id="cpuScore">0</span>%
+        </header>
+
+        <div class="field">
+            <div class="board">
+                <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+                <div class="overlay show" id="startOverlay">
+                    <h1>ナワバリバトル</h1>
+                    <p>
+                        左の操作エリアをドラッグして移動。<br>
+                        ⭐を2つ取って SP ボタンで必殺技！<br>
+                        60秒で CPU より多く塗ろう
+                    </p>
+                    <p class="key-hint">キーボード: WASD / 矢印キーで移動、スペースで必殺技</p>
+                    <button type="button" id="startBtn">スタート</button>
+                </div>
+
+                <div class="overlay" id="gameOver">
+                    <h2 id="resultText"></h2>
+                    <p id="resultDetail"></p>
+                    <button type="button" id="playAgainBtn">もう一度</button>
+                </div>
             </div>
         </div>
 
-        <div class="special-gauge-container">
-            <div class="special-gauge-label">⚡ 必殺技ゲージ</div>
-            <div class="special-gauge-bar">
-                <div class="special-gauge-fill" id="specialGauge">0%</div>
+        <div class="stick-zone" id="stickZone">
+            <div class="stick-base" id="stickBase">
+                <div class="stick-knob" id="stickKnob"></div>
             </div>
-            <div class="key-hint" id="specialHint">アイテムを集めてゲージを貯めよう！</div>
+            <span class="stick-zone-label">ドラッグで移動</span>
         </div>
 
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-
-        <div class="controls">
-            <button id="startBtn">ゲーム開始</button>
-            <button id="resetBtn" disabled>リセット</button>
-        </div>
-
-        <div class="instructions">
-            <h3>操作方法</h3>
-            <p>
-                <strong>移動:</strong> WASDキー または 矢印キー<br>
-                <strong>必殺技:</strong> スペースキー（ゲージが100%の時）<br>
-                <br>
-                ⭐ アイテム（星）を取得すると必殺技ゲージが貯まります！<br>
-                ⚡ 必殺技発動中は塗れる範囲が2倍になります！<br>
-                60秒でコンピュータ（赤）より多くの陣地を塗りましょう！
-            </p>
-        </div>
-    </div>
-
-    <div class="game-over" id="gameOver">
-        <div class="game-over-content">
-            <h2 id="resultText"></h2>
-            <p id="resultDetail"></p>
-            <button id="playAgainBtn">もう一度プレイ</button>
-        </div>
+        <button type="button" class="special-btn" id="specialBtn">
+            <span id="specialLabel">SP<br>0%</span>
+        </button>
     </div>
 
     <script src="game.js"></script>
