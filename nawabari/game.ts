@@ -100,6 +100,7 @@ class Game {
     private specialActive: boolean;
     private specialEndTime: number;
     private stick: Position = { x: 0, y: 0 };
+    private sound = new Sound();
     private lastFrameTime = 0;
     private cpuTarget: Position | null = null;
     private cpuTargetTimer = 0;
@@ -254,6 +255,18 @@ class Game {
         specialBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
         // ボタンイベント
+        const muteBtn = document.getElementById('muteBtn')!;
+        const renderMute = () => {
+            muteBtn.textContent = this.sound.muted ? '🔇' : '🔊';
+            muteBtn.setAttribute('aria-label', this.sound.muted ? '音を出す' : '音を消す');
+        };
+        renderMute();
+        muteBtn.addEventListener('click', () => {
+            this.sound.unlock();
+            this.sound.toggleMute();
+            renderMute();
+        });
+
         document.getElementById('startBtn')?.addEventListener('click', () => {
             this.startGame();
         });
@@ -329,6 +342,11 @@ class Game {
         this.timeLeft = GAME_DURATION;
         this.updateTimer();
 
+        this.sound.unlock();
+        this.sound.setHurry(false);
+        this.sound.whistle();
+        this.sound.startBgm();
+
         document.getElementById('startOverlay')!.classList.remove('show');
         this.hideGameOver();
 
@@ -336,6 +354,8 @@ class Game {
         this.timerInterval = window.setInterval(() => {
             this.timeLeft--;
             this.updateTimer();
+            if (this.timeLeft === 10) this.sound.setHurry(true);
+            if (this.timeLeft > 0 && this.timeLeft <= 5) this.sound.tick();
 
             if (this.timeLeft <= 0) {
                 this.endGame();
@@ -370,6 +390,7 @@ class Game {
         this.keys.clear();
         this.releaseStick();
         this.cpuTarget = null;
+        this.sound.stopBgm();
 
         this.fitArena();
         this.paintCtx.clearRect(0, 0, this.width, this.height);
@@ -542,6 +563,7 @@ class Game {
         }
 
         this.paintGrid(fighter.owner, to, radius);
+        if (fighter === this.player && distance > 0.5) this.sound.paint();
     }
 
     // 円形のストロークだけだと輪郭が機械的になるため、縁に飛沫を散らしてペンキらしいギザつきを出す
@@ -894,6 +916,8 @@ class Game {
         }
 
         // 結果表示
+        this.sound.stopBgm();
+        this.sound.whistle(true);
         this.showGameOver(playerCells, cpuCells);
     }
 
@@ -905,18 +929,28 @@ class Game {
         if (playerCells > cpuCells) {
             resultText.textContent = '🎉 勝利！';
             resultText.className = 'win';
+            this.playResultLater('win');
             resultDetail.textContent = `あなた: ${playerCells}マス vs コンピュータ: ${cpuCells}マス`;
         } else if (playerCells < cpuCells) {
             resultText.textContent = '😢 敗北...';
             resultText.className = 'lose';
+            this.playResultLater('lose');
             resultDetail.textContent = `あなた: ${playerCells}マス vs コンピュータ: ${cpuCells}マス`;
         } else {
             resultText.textContent = '🤝 引き分け';
             resultText.className = 'draw';
+            this.playResultLater('draw');
             resultDetail.textContent = `両者: ${playerCells}マス`;
         }
 
         gameOverDiv.classList.add('show');
+    }
+
+    // 終了の笛と重なると聞き取れないため、笛が鳴り終わってから流す
+    private playResultLater(outcome: 'win' | 'lose' | 'draw'): void {
+        window.setTimeout(() => {
+            if (!this.gameRunning) this.sound.result(outcome);
+        }, 900);
     }
 
     private hideGameOver(): void {
@@ -949,7 +983,10 @@ class Game {
                 this.items.splice(i, 1);
 
                 // 必殺技ゲージを増加
+                const wasReady = this.specialGauge >= 100;
                 this.specialGauge = Math.min(100, this.specialGauge + SPECIAL_GAUGE_PER_ITEM);
+                this.sound.pickup();
+                if (!wasReady && this.specialGauge >= 100) this.sound.ready();
                 this.updateSpecialGaugeUI();
             }
         }
@@ -961,6 +998,7 @@ class Game {
             this.specialEndTime = Date.now() + SPECIAL_DURATION;
             this.specialGauge = 0;
             this.burstSplat(this.player, { x: this.player.x, y: this.player.y }, SPECIAL_BRUSH_RADIUS * 1.6, 14);
+            this.sound.special();
             this.updateSpecialGaugeUI();
         }
     }
