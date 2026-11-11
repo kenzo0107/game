@@ -215,6 +215,50 @@
             display: none;
         }
 
+        .history-totals {
+            font-weight: bold;
+            color: #fde047;
+        }
+
+        .history-list {
+            list-style: none;
+            width: min(100%, 420px);
+            max-height: 55%;
+            overflow-y: auto;
+            touch-action: pan-y;
+            font-variant-numeric: tabular-nums;
+            font-size: 0.9em;
+        }
+
+        .history-item {
+            display: grid;
+            grid-template-columns: auto 4.5em 3.5em 1fr;
+            gap: 8px;
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            text-align: left;
+        }
+
+        .history-item span:last-child {
+            text-align: right;
+        }
+
+        .history-item[data-outcome="win"] span:nth-child(2) {
+            color: #34d399;
+        }
+
+        .history-item[data-outcome="lose"] span:nth-child(2) {
+            color: #f87171;
+        }
+
+        .history-item[data-outcome="draw"] span:nth-child(2) {
+            color: #fbbf24;
+        }
+
+        .overlay p[hidden] {
+            display: none;
+        }
+
         .mute-btn {
             position: absolute;
             top: 8px;
@@ -357,6 +401,7 @@
                     </p>
                     <p class="key-hint">キーボード: WASD / 矢印キーで移動、スペースで必殺技</p>
                     <button type="button" id="startBtn">スタート</button>
+                    <button type="button" class="link-btn history-btn">📜 対戦履歴</button>
                     <button type="button" class="link-btn" id="resetLevelBtn" hidden>Lv.1 からやり直す</button>
                 </div>
 
@@ -365,6 +410,15 @@
                     <p id="resultDetail"></p>
                     <p class="result-level" id="resultLevel"></p>
                     <button type="button" id="playAgainBtn">もう一度</button>
+                    <button type="button" class="link-btn history-btn">📜 対戦履歴</button>
+                </div>
+
+                <div class="overlay" id="historyOverlay">
+                    <h2>対戦履歴</h2>
+                    <p class="history-totals" id="historyTotals"></p>
+                    <ol class="history-list" id="historyList"></ol>
+                    <p id="historyEmpty">まだ対戦していません</p>
+                    <button type="button" id="closeHistoryBtn">もどる</button>
                 </div>
             </div>
         </div>
@@ -382,6 +436,7 @@
     </div>
 
     <script src="sound.js"></script>
+    <script src="history.js"></script>
     <script src="game.js"></script>
 </body>
 </html>

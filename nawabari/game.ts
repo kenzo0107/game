@@ -49,6 +49,12 @@ const cpuSkillFor = (level: number): CpuSkill => {
     };
 };
 
+const formatPlayedAt = (time: number): string => {
+    const d = new Date(time);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 // 色定義
 enum CellOwner {
     NONE = 0,
@@ -131,6 +137,8 @@ class Game {
     private cpuSkill = cpuSkillFor(this.cpuLevel);
     private cpuGauge = 0;
     private cpuSpecialEndTime = 0;
+    private history = new MatchHistory();
+    private historyReturnTo: HTMLElement | null = null;
 
     constructor() {
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -299,6 +307,11 @@ class Game {
             this.resetGame();
         });
 
+        document.querySelectorAll('.history-btn').forEach((btn) => {
+            btn.addEventListener('click', () => this.openHistory(btn.closest('.overlay') as HTMLElement));
+        });
+        document.getElementById('closeHistoryBtn')!.addEventListener('click', () => this.closeHistory());
+
         document.getElementById('startBtn')?.addEventListener('click', () => {
             this.startGame();
         });
@@ -380,6 +393,7 @@ class Game {
         this.sound.startBgm();
 
         document.getElementById('startOverlay')!.classList.remove('show');
+        document.getElementById('historyOverlay')!.classList.remove('show');
         this.hideGameOver();
 
         // タイマー開始
@@ -1014,6 +1028,7 @@ class Game {
 
         const resultLevel = document.getElementById('resultLevel')!;
         const playedLevel = this.cpuLevel;
+        this.recordMatch(playerCells, cpuCells, playedLevel);
 
         if (playerCells > cpuCells) {
             this.saveCpuLevel(Math.min(MAX_CPU_LEVEL, playedLevel + 1));
@@ -1040,6 +1055,63 @@ class Game {
         }
 
         gameOverDiv.classList.add('show');
+    }
+
+    private recordMatch(playerCells: number, cpuCells: number, cpuLevel: number): void {
+        const total = playerCells + cpuCells || 1;
+        const toPercent = (cells: number) => Math.round((cells / total) * 1000) / 10;
+        this.history.add({
+            playedAt: Date.now(),
+            outcome: playerCells > cpuCells ? 'win' : playerCells < cpuCells ? 'lose' : 'draw',
+            cpuLevel,
+            playerPercent: toPercent(playerCells),
+            cpuPercent: toPercent(cpuCells)
+        });
+    }
+
+    private openHistory(from: HTMLElement): void {
+        this.historyReturnTo = from;
+        from.classList.remove('show');
+        this.renderHistory();
+        document.getElementById('historyOverlay')!.classList.add('show');
+    }
+
+    private closeHistory(): void {
+        document.getElementById('historyOverlay')!.classList.remove('show');
+        // 履歴を見ている間は resize で盤面を作り直さないため、開始前の画面に戻るときに向きを合わせ直す
+        if (this.historyReturnTo?.id === 'startOverlay') this.resetGame();
+        this.historyReturnTo?.classList.add('show');
+        this.historyReturnTo = null;
+    }
+
+    private renderHistory(): void {
+        const { win, lose, draw } = this.history.totals;
+        document.getElementById('historyTotals')!.textContent = `通算 ${win}勝 ${lose}敗 ${draw}分`;
+
+        const list = document.getElementById('historyList')!;
+        const records = this.history.records;
+        list.replaceChildren(
+            ...records.map((record) => {
+                const item = document.createElement('li');
+                item.className = 'history-item';
+                item.dataset.outcome = record.outcome;
+                const cells = [
+                    formatPlayedAt(record.playedAt),
+                    OUTCOME_LABELS[record.outcome],
+                    `Lv.${record.cpuLevel}`,
+                    `${record.playerPercent.toFixed(1)}% - ${record.cpuPercent.toFixed(1)}%`
+                ];
+                item.replaceChildren(
+                    ...cells.map((text) => {
+                        const span = document.createElement('span');
+                        span.textContent = text;
+                        return span;
+                    })
+                );
+                return item;
+            })
+        );
+        document.getElementById('historyEmpty')!.hidden = records.length > 0;
     }
 
     private loadCpuLevel(): number {
