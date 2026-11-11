@@ -1,15 +1,20 @@
 export interface InputState {
-  pitchUp: boolean;
-  pitchDown: boolean;
-  rollLeft: boolean;
-  rollRight: boolean;
-  yawLeft: boolean;
-  yawRight: boolean;
+  pitch: number;
+  roll: number;
+  yaw: number;
   throttleUp: boolean;
   throttleDown: boolean;
 }
 
-type Action = keyof InputState;
+type Action =
+  | 'pitchUp'
+  | 'pitchDown'
+  | 'rollLeft'
+  | 'rollRight'
+  | 'yawLeft'
+  | 'yawRight'
+  | 'throttleUp'
+  | 'throttleDown';
 
 const KEY_BINDINGS: Record<Action, string> = {
   pitchUp: 'arrowup',
@@ -22,11 +27,21 @@ const KEY_BINDINGS: Record<Action, string> = {
   throttleDown: 's',
 };
 
-const STICK_DEAD_ZONE = 0.3;
+const STICK_DEAD_ZONE = 0.15;
+
+const clampAxis = (value: number): number => Math.max(-1, Math.min(1, value));
+
+// 不感帯内を 0 にするだけだと、抜けた瞬間に操作量が 0 から 0.15 へ跳ぶため、外側を 0〜1 に引き伸ばす
+const applyDeadZone = (value: number): number => {
+  const magnitude = Math.abs(value);
+  if (magnitude < STICK_DEAD_ZONE) return 0;
+  return Math.sign(value) * ((magnitude - STICK_DEAD_ZONE) / (1 - STICK_DEAD_ZONE));
+};
 
 export class InputController {
   private keys = new Set<string>();
   private touch = new Set<Action>();
+  private stick = { x: 0, y: 0 };
 
   constructor() {
     window.addEventListener('keydown', (e) => this.keys.add(e.key.toLowerCase()));
@@ -58,17 +73,14 @@ export class InputController {
         dy /= length;
       }
       knob.style.transform = `translate(${dx * radius * 0.6}px, ${dy * radius * 0.6}px)`;
-      this.setTouch('pitchUp', dy < -STICK_DEAD_ZONE);
-      this.setTouch('pitchDown', dy > STICK_DEAD_ZONE);
-      this.setTouch('rollLeft', dx < -STICK_DEAD_ZONE);
-      this.setTouch('rollRight', dx > STICK_DEAD_ZONE);
+      this.stick = { x: applyDeadZone(dx), y: applyDeadZone(dy) };
     };
 
     const release = (e: PointerEvent) => {
       if (e.pointerId !== activePointer) return;
       activePointer = null;
       knob.style.transform = '';
-      (['pitchUp', 'pitchDown', 'rollLeft', 'rollRight'] as const).forEach((a) => this.touch.delete(a));
+      this.stick = { x: 0, y: 0 };
     };
 
     stick.addEventListener('pointerdown', (e) => {
@@ -104,16 +116,21 @@ export class InputController {
     });
   }
 
-  private setTouch(action: Action, active: boolean): void {
-    if (active) this.touch.add(action);
-    else this.touch.delete(action);
+  private isActive(action: Action): boolean {
+    return this.keys.has(KEY_BINDINGS[action]) || this.touch.has(action);
+  }
+
+  private digitalAxis(negative: Action, positive: Action): number {
+    return (this.isActive(positive) ? 1 : 0) - (this.isActive(negative) ? 1 : 0);
   }
 
   public getInputState(): InputState {
-    const state = {} as InputState;
-    (Object.keys(KEY_BINDINGS) as Action[]).forEach((action) => {
-      state[action] = this.keys.has(KEY_BINDINGS[action]) || this.touch.has(action);
-    });
-    return state;
+    return {
+      pitch: clampAxis(this.digitalAxis('pitchDown', 'pitchUp') - this.stick.y),
+      roll: clampAxis(this.digitalAxis('rollLeft', 'rollRight') + this.stick.x),
+      yaw: this.digitalAxis('yawLeft', 'yawRight'),
+      throttleUp: this.isActive('throttleUp'),
+      throttleDown: this.isActive('throttleDown'),
+    };
   }
 }

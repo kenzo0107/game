@@ -277,9 +277,9 @@ export class Aircraft {
     let yawInput = 0;
 
     if (hasFuel) {
-      pitchInput = (input.pitchUp ? 1 : 0) - (input.pitchDown ? 1 : 0);
-      rollInput = (input.rollLeft ? -1 : 0) + (input.rollRight ? 1 : 0);
-      yawInput = (input.yawLeft ? -1 : 0) + (input.yawRight ? 1 : 0);
+      pitchInput = input.pitch;
+      rollInput = input.roll;
+      yawInput = input.yaw;
     }
 
     // 角速度更新
