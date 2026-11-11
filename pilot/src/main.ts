@@ -178,7 +178,9 @@ class Game {
         border-radius: 10px;
         text-align: center;
         font-size: 24px;
+        cursor: pointer;
       `;
+      gameOverDiv.addEventListener('click', () => this.restart());
 
       const title = document.createElement('div');
       title.style.cssText = 'font-size: 48px; margin-bottom: 20px;';
@@ -186,7 +188,7 @@ class Game {
 
       const instruction = document.createElement('div');
       instruction.style.cssText = 'font-size: 18px;';
-      instruction.textContent = 'Rキーでリスタート';
+      instruction.textContent = 'Rキー または タップでリスタート';
 
       gameOverDiv.appendChild(title);
       gameOverDiv.appendChild(instruction);
@@ -211,7 +213,9 @@ class Game {
         border-radius: 10px;
         text-align: center;
         font-size: 24px;
+        cursor: pointer;
       `;
+      landingDiv.addEventListener('click', () => this.restart());
 
       const title = document.createElement('div');
       title.style.cssText = 'font-size: 48px; margin-bottom: 20px;';
@@ -219,7 +223,7 @@ class Game {
 
       const instruction = document.createElement('div');
       instruction.style.cssText = 'font-size: 18px;';
-      instruction.textContent = 'Rキーでリスタート';
+      instruction.textContent = 'Rキー または タップでリスタート';
 
       landingDiv.appendChild(title);
       landingDiv.appendChild(instruction);
