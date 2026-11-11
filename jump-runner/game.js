@@ -1943,56 +1943,92 @@ function playBossAppearSound() {
     });
 }
 
-// 軽快なメロディーパターン（周波数配列）
-const melodyPattern = [
-    // C5, E5, G5, E5, C5, G4, C5, E5
-    [523.25, 0.15], [659.25, 0.15], [783.99, 0.15], [659.25, 0.15],
-    [523.25, 0.15], [392.00, 0.15], [523.25, 0.15], [659.25, 0.15],
-    // D5, F5, A5, F5, D5, A4, D5, F5
-    [587.33, 0.15], [698.46, 0.15], [880.00, 0.15], [698.46, 0.15],
-    [587.33, 0.15], [440.00, 0.15], [587.33, 0.15], [698.46, 0.15]
+const RUN_BASS_ROOTS = [45, 41, 43, 40];
+const RUN_MELODY = [
+    76, 0, 81, 76, 84, 0, 83, 81, 76, 0, 81, 76, 83, 84, 83, 81,
+    77, 0, 81, 77, 84, 0, 83, 81, 77, 0, 81, 77, 79, 81, 79, 77,
+    79, 0, 83, 79, 86, 0, 84, 83, 79, 0, 83, 79, 84, 86, 84, 83,
+    80, 0, 83, 80, 88, 0, 86, 83, 80, 83, 86, 88, 86, 83, 80, 76,
 ];
 
-// ベースラインパターン
-const bassPattern = [
-    [130.81, 0.3], [130.81, 0.3], [146.83, 0.3], [146.83, 0.3],
-    [130.81, 0.3], [130.81, 0.3], [146.83, 0.3], [146.83, 0.3]
-];
+function midiToFreq(note) {
+    return 440 * 2 ** ((note - 69) / 12);
+}
+
+let noiseBuffer = null;
+
+function playNoise(startTime, duration, volume, highpass) {
+    if (!noiseBuffer) {
+        noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.3, audioContext.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const source = audioContext.createBufferSource();
+    source.buffer = noiseBuffer;
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = highpass;
+    const gainNode = audioContext.createGain();
+    gainNode.gain.setValueAtTime(volume, startTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    source.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(masterGain);
+    source.start(startTime);
+    source.stop(startTime + duration);
+}
+
+function playKick(startTime) {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(150, startTime);
+    oscillator.frequency.exponentialRampToValueAtTime(40, startTime + 0.12);
+    gainNode.gain.setValueAtTime(0.4, startTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
+    oscillator.connect(gainNode);
+    gainNode.connect(masterGain);
+    oscillator.start(startTime);
+    oscillator.stop(startTime + 0.15);
+}
 
 // BGM再生
 function playMusic() {
     if (!audioContext) return;
 
-    let noteIndex = 0;
-    const beatDuration = 0.15; // 1音の長さ
+    let step = 0;
 
-    function playNextNote() {
-        const currentTime = audioContext.currentTime;
+    function playNextStep() {
+        const t = audioContext.currentTime;
+        // スピードが上がるほどテンポも上げ、追い立てられる感じを強める
+        const stepSec = Math.max(0.085, 0.12 - (gameSpeed - 2) * 0.006);
+        const bar = Math.floor(step / 16) % RUN_BASS_ROOTS.length;
+        const beat = step % 16;
 
-        // メロディー
-        const [melodyFreq, melodyDur] = melodyPattern[noteIndex % melodyPattern.length];
-        playTone(melodyFreq, melodyDur, currentTime, 'square');
+        const melody = RUN_MELODY[step % RUN_MELODY.length];
+        if (melody) playTone(midiToFreq(melody), stepSec * 0.9, t, 'square');
 
-        // ベース（2拍ごと）
-        if (noteIndex % 2 === 0) {
-            const [bassFreq, bassDur] = bassPattern[Math.floor(noteIndex / 2) % bassPattern.length];
-            playTone(bassFreq, bassDur, currentTime, 'triangle');
+        if (beat % 2 === 0) {
+            const root = RUN_BASS_ROOTS[bar];
+            playTone(midiToFreq(beat % 4 === 0 ? root : root + 12), stepSec * 1.8, t, 'sawtooth');
         }
 
-        // リズム（ハイハット風）
-        playTone(8000, 0.05, currentTime, 'square');
+        if (beat % 4 === 0 || (bar === 3 && beat === 14)) playKick(t);
+        if (beat === 4 || beat === 12) playNoise(t, 0.12, 0.25, 1200);
+        playNoise(t, 0.03, beat % 2 === 0 ? 0.05 : 0.1, 7000);
 
-        noteIndex++;
+        step++;
+        musicInterval = setTimeout(playNextStep, stepSec * 1000);
     }
 
-    // 定期的に音を鳴らす
-    musicInterval = setInterval(playNextNote, beatDuration * 1000);
+    playNextStep();
 }
 
 // BGM停止
 function stopMusic() {
     if (musicInterval) {
         clearInterval(musicInterval);
+        clearTimeout(musicInterval);
         musicInterval = null;
     }
 }
