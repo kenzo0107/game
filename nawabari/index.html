@@ -188,6 +188,33 @@
             transform: scale(0.96);
         }
 
+        .level-badge {
+            padding: 4px 14px;
+            border-radius: 999px;
+            background: #ef4444;
+            color: white;
+            font-weight: bold;
+        }
+
+        .overlay .result-level {
+            color: #fde047;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .overlay .link-btn {
+            background: none;
+            color: #cbd5e1;
+            padding: 4px 8px;
+            font-size: 0.85em;
+            font-weight: normal;
+            text-decoration: underline;
+        }
+
+        .overlay .link-btn[hidden] {
+            display: none;
+        }
+
         .mute-btn {
             position: absolute;
             top: 8px;
@@ -307,7 +334,7 @@
             <div class="hud-row">
                 <span class="player-score">あなた <span id="playerScore">0</span>%</span>
                 <span class="timer" id="timerBox"><span id="timer">30</span></span>
-                <span class="cpu-score"><span id="cpuScore">0</span>% CPU</span>
+                <span class="cpu-score"><span id="cpuScore">0</span>% CPU <span id="cpuLevel">Lv.1</span></span>
             </div>
             <div class="turf">
                 <div class="turf-player" id="playerTurf"></div>
@@ -322,6 +349,7 @@
 
                 <div class="overlay show" id="startOverlay">
                     <h1>ナワバリバトル</h1>
+                    <p class="level-badge">VS CPU <span id="startLevel">Lv.1</span></p>
                     <p>
                         右の操作エリアをドラッグして移動。<br>
                         ⭐を2つ取って左の SP ボタンで必殺技！<br>
@@ -329,11 +357,13 @@
                     </p>
                     <p class="key-hint">キーボード: WASD / 矢印キーで移動、スペースで必殺技</p>
                     <button type="button" id="startBtn">スタート</button>
+                    <button type="button" class="link-btn" id="resetLevelBtn" hidden>Lv.1 からやり直す</button>
                 </div>
 
                 <div class="overlay" id="gameOver">
                     <h2 id="resultText"></h2>
                     <p id="resultDetail"></p>
+                    <p class="result-level" id="resultLevel"></p>
                     <button type="button" id="playAgainBtn">もう一度</button>
                 </div>
             </div>

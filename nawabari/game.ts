@@ -4,15 +4,12 @@ const GRID_SIZE = 10;
 const GAME_DURATION = 30; // 秒
 const PLAYER_SPEED = 1.5; // それ以外のエリアでは少し遅く
 const PLAYER_SPEED_BOOST = 4; // 自分の色の上では速く移動
-const CPU_SPEED = 1.5;
-const CPU_SPEED_BOOST = 2.5; // CPUの色の上での移動速度
 const ITEM_SIZE = 20;
 const ITEM_SPAWN_INTERVAL = 5000; // アイテム生成間隔（ミリ秒）
 const SPECIAL_DURATION = 5000; // 必殺技持続時間（ミリ秒）
 const SPECIAL_GAUGE_PER_ITEM = 50; // 1つのアイテムで増加するゲージ量
 const FRAME_MS = 1000 / 60; // 速度定数は 60fps の1フレームあたりの移動量で定義している
 const MAX_FRAME_STEP = 3; // タブ復帰直後などに一気にワープしないよう上限を設ける
-const CPU_RETARGET_MS = 2000;
 const STICK_RADIUS = 50; // CSS px
 const STICK_DEAD_ZONE = 0.12;
 const BRUSH_RADIUS = 25;
@@ -25,6 +22,32 @@ const BACK_WALL = 80;
 // 横向きに走るとマフラーと影が足元から左右へはみ出すため、左右にも壁の余白を取る
 const SIDE_WALL = 24;
 const MAX_RENDER_SCALE = 1.5; // 高DPI端末で全画面合成を毎フレーム行っても重くならない上限
+
+const MAX_CPU_LEVEL = 20;
+const CPU_LEVEL_STORAGE_KEY = 'nawabariCpuLevel';
+const CPU_ITEM_CHASE_RANGE = 350;
+
+interface CpuSkill {
+    speed: number;
+    boost: number;
+    retargetMs: number;
+    candidates: number;
+    retargetOnArrival: boolean;
+    collectsItems: boolean;
+}
+
+// Lv.1 は従来どおりの「ランダムに歩き回るだけ」の強さに保ち、勝つたびに速さと賢さを少しずつ上げる
+const cpuSkillFor = (level: number): CpuSkill => {
+    const step = level - 1;
+    return {
+        speed: Math.min(1.5 + 0.08 * step, 2.3),
+        boost: Math.min(2.5 + 0.15 * step, 4.2),
+        retargetMs: Math.max(700, 2000 - 120 * step),
+        candidates: Math.min(1 + 2 * step, 16),
+        retargetOnArrival: level >= 2,
+        collectsItems: level >= 3
+    };
+};
 
 // 色定義
 enum CellOwner {
@@ -104,6 +127,10 @@ class Game {
     private lastFrameTime = 0;
     private cpuTarget: Position | null = null;
     private cpuTargetTimer = 0;
+    private cpuLevel = this.loadCpuLevel();
+    private cpuSkill = cpuSkillFor(this.cpuLevel);
+    private cpuGauge = 0;
+    private cpuSpecialEndTime = 0;
 
     constructor() {
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -267,6 +294,11 @@ class Game {
             renderMute();
         });
 
+        document.getElementById('resetLevelBtn')!.addEventListener('click', () => {
+            this.saveCpuLevel(1);
+            this.resetGame();
+        });
+
         document.getElementById('startBtn')?.addEventListener('click', () => {
             this.startGame();
         });
@@ -408,6 +440,10 @@ class Game {
         this.specialGauge = 0;
         this.specialActive = false;
         this.specialEndTime = 0;
+        this.cpuSkill = cpuSkillFor(this.cpuLevel);
+        this.cpuGauge = 0;
+        this.cpuSpecialEndTime = 0;
+        this.renderCpuLevel();
 
         // UI更新
         this.updateTimer();
@@ -500,17 +536,20 @@ class Game {
     private updateCPUPosition(frames: number): void {
         // 一定時間ごとにランダムな目標地点を設定
         this.cpuTargetTimer += frames * FRAME_MS;
-        if (!this.cpuTarget || this.cpuTargetTimer > CPU_RETARGET_MS) {
-            this.cpuTarget = {
-                x: EDGE_MARGIN + Math.random() * (this.width - EDGE_MARGIN * 2),
-                y: EDGE_MARGIN + Math.random() * (this.height - EDGE_MARGIN * 2)
-            };
+        const arrived =
+            this.cpuTarget !== null && Math.hypot(this.cpuTarget.x - this.cpu.x, this.cpuTarget.y - this.cpu.y) < 6;
+        if (
+            !this.cpuTarget ||
+            this.cpuTargetTimer > this.cpuSkill.retargetMs ||
+            (arrived && this.cpuSkill.retargetOnArrival)
+        ) {
+            this.cpuTarget = this.chooseCpuTarget();
             this.cpuTargetTimer = 0;
         }
 
         // 自分の色の上なら速度アップ
         const isOnOwnColor = this.ownerAt(this.cpu) === CellOwner.CPU;
-        const speed = (isOnOwnColor ? CPU_SPEED_BOOST : CPU_SPEED) * frames;
+        const speed = (isOnOwnColor ? this.cpuSkill.boost : this.cpuSkill.speed) * frames;
 
         // 目標地点に向かって移動
         const dx = this.cpuTarget.x - this.cpu.x;
@@ -520,6 +559,49 @@ class Game {
         if (distance > speed) {
             this.moveFighter(this.cpu, (dx / distance) * speed, (dy / distance) * speed);
         }
+    }
+
+    private chooseCpuTarget(): Position {
+        if (this.cpuSkill.collectsItems) {
+            const nearest = this.items
+                .map((item) => ({ x: item.x + ITEM_SIZE / 2, y: item.y + ITEM_SIZE / 2 }))
+                .sort((a, b) => this.distanceFromCpu(a) - this.distanceFromCpu(b))[0];
+            if (nearest && this.distanceFromCpu(nearest) < CPU_ITEM_CHASE_RANGE) return nearest;
+        }
+
+        let best: Position | null = null;
+        let bestScore = -Infinity;
+        for (let i = 0; i < this.cpuSkill.candidates; i++) {
+            const candidate = {
+                x: EDGE_MARGIN + Math.random() * (this.width - EDGE_MARGIN * 2),
+                y: EDGE_MARGIN + Math.random() * (this.height - EDGE_MARGIN * 2)
+            };
+            const score = this.cpuPaintGain(candidate) / (1 + this.distanceFromCpu(candidate) / 250);
+            if (score > bestScore) {
+                best = candidate;
+                bestScore = score;
+            }
+        }
+        return best!;
+    }
+
+    private distanceFromCpu(point: Position): number {
+        return Math.hypot(point.x - this.cpu.x, point.y - this.cpu.y);
+    }
+
+    // 相手の色を塗り替えると自分が増えて相手が減るため、未塗りより高く評価する
+    private cpuPaintGain(point: Position): number {
+        const col = Math.floor(point.x / GRID_SIZE);
+        const row = Math.floor(point.y / GRID_SIZE);
+        let gain = 0;
+        for (let dy = -4; dy <= 4; dy++) {
+            for (let dx = -4; dx <= 4; dx++) {
+                const owner = this.grid[row + dy]?.[col + dx];
+                if (owner === CellOwner.NONE) gain += 1;
+                else if (owner === CellOwner.PLAYER) gain += 1.5;
+            }
+        }
+        return gain;
     }
 
     private animateRun(fighter: Fighter, frames: number): void {
@@ -535,7 +617,11 @@ class Game {
     }
 
     private brushRadius(fighter: Fighter): number {
-        return fighter.owner === CellOwner.PLAYER && this.specialActive ? SPECIAL_BRUSH_RADIUS : BRUSH_RADIUS;
+        return this.isSpecialActive(fighter) ? SPECIAL_BRUSH_RADIUS : BRUSH_RADIUS;
+    }
+
+    private isSpecialActive(fighter: Fighter): boolean {
+        return fighter === this.player ? this.specialActive : Date.now() < this.cpuSpecialEndTime;
     }
 
     private paintTrail(fighter: Fighter): void {
@@ -648,8 +734,8 @@ class Game {
         this.drawItems();
 
         // 必殺技発動中のエフェクト
-        if (this.specialActive) {
-            this.drawSpecialEffect();
+        for (const fighter of [this.player, this.cpu]) {
+            if (this.isSpecialActive(fighter)) this.drawSpecialEffect(fighter);
         }
 
         const fighters = [this.player, this.cpu].sort((a, b) => a.y - b.y);
@@ -926,17 +1012,27 @@ class Game {
         const resultText = document.getElementById('resultText')!;
         const resultDetail = document.getElementById('resultDetail')!;
 
+        const resultLevel = document.getElementById('resultLevel')!;
+        const playedLevel = this.cpuLevel;
+
         if (playerCells > cpuCells) {
+            this.saveCpuLevel(Math.min(MAX_CPU_LEVEL, playedLevel + 1));
+            resultLevel.textContent =
+                playedLevel >= MAX_CPU_LEVEL
+                    ? `最強の CPU Lv.${MAX_CPU_LEVEL} に勝利！`
+                    : `CPU Lv.${playedLevel} を撃破！ 次は Lv.${this.cpuLevel}`;
             resultText.textContent = '🎉 勝利！';
             resultText.className = 'win';
             this.playResultLater('win');
             resultDetail.textContent = `あなた: ${playerCells}マス vs コンピュータ: ${cpuCells}マス`;
         } else if (playerCells < cpuCells) {
+            resultLevel.textContent = `CPU Lv.${playedLevel} にもう一度挑戦！`;
             resultText.textContent = '😢 敗北...';
             resultText.className = 'lose';
             this.playResultLater('lose');
             resultDetail.textContent = `あなた: ${playerCells}マス vs コンピュータ: ${cpuCells}マス`;
         } else {
+            resultLevel.textContent = `CPU Lv.${playedLevel} にもう一度挑戦！`;
             resultText.textContent = '🤝 引き分け';
             resultText.className = 'draw';
             this.playResultLater('draw');
@@ -944,6 +1040,32 @@ class Game {
         }
 
         gameOverDiv.classList.add('show');
+    }
+
+    private loadCpuLevel(): number {
+        try {
+            const saved = Number(localStorage.getItem(CPU_LEVEL_STORAGE_KEY));
+            return Number.isInteger(saved) && saved >= 1 ? Math.min(saved, MAX_CPU_LEVEL) : 1;
+        } catch {
+            return 1;
+        }
+    }
+
+    private saveCpuLevel(level: number): void {
+        this.cpuLevel = level;
+        try {
+            localStorage.setItem(CPU_LEVEL_STORAGE_KEY, String(level));
+        } catch {
+            // 保存できない環境でも、このページを開いている間はレベルを引き継ぐ
+        }
+        this.renderCpuLevel();
+    }
+
+    private renderCpuLevel(): void {
+        const label = `Lv.${this.cpuLevel}`;
+        document.getElementById('cpuLevel')!.textContent = label;
+        document.getElementById('startLevel')!.textContent = label;
+        document.getElementById('resetLevelBtn')!.hidden = this.cpuLevel <= 1;
     }
 
     // 終了の笛と重なると聞き取れないため、笛が鳴り終わってから流す
@@ -988,8 +1110,27 @@ class Game {
                 this.sound.pickup();
                 if (!wasReady && this.specialGauge >= 100) this.sound.ready();
                 this.updateSpecialGaugeUI();
+                continue;
+            }
+
+            if (this.cpuSkill.collectsItems) {
+                const cpuDistance = Math.hypot(this.cpu.x - (item.x + ITEM_SIZE / 2), this.cpu.y - (item.y + ITEM_SIZE / 2));
+                if (cpuDistance < GRID_SIZE + ITEM_SIZE) {
+                    item.active = false;
+                    this.items.splice(i, 1);
+                    this.cpuGauge = Math.min(100, this.cpuGauge + SPECIAL_GAUGE_PER_ITEM);
+                    if (this.cpuGauge >= 100) this.activateCpuSpecial();
+                }
             }
         }
+    }
+
+    private activateCpuSpecial(): void {
+        if (Date.now() < this.cpuSpecialEndTime) return;
+        this.cpuGauge = 0;
+        this.cpuSpecialEndTime = Date.now() + SPECIAL_DURATION;
+        this.burstSplat(this.cpu, { x: this.cpu.x, y: this.cpu.y }, SPECIAL_BRUSH_RADIUS * 1.6, 14);
+        this.sound.special();
     }
 
     private activateSpecial(): void {
@@ -1139,7 +1280,7 @@ class Game {
         ctx.restore();
     }
 
-    private drawSpecialEffect(): void {
+    private drawSpecialEffect(fighter: Fighter): void {
         // プレイヤーの周りに光るエフェクト
         const time = Date.now() / 200;
         const radius = SPECIAL_BRUSH_RADIUS + Math.sin(time) * 5;
@@ -1149,7 +1290,7 @@ class Game {
         this.ctx.strokeStyle = '#fbbf24';
         this.ctx.lineWidth = 6;
         this.ctx.beginPath();
-        this.ctx.ellipse(this.player.x, this.player.y, radius, radius * 0.45, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(fighter.x, fighter.y, radius, radius * 0.45, 0, 0, Math.PI * 2);
         this.ctx.stroke();
         this.ctx.restore();
     }
