@@ -1,6 +1,9 @@
 // キャンバス設定
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const screenCtx = canvas.getContext('2d');
+// 処理落ちの追いつき分の進行では描画を捨てる。更新と描画が絡み合ったコードを分離する大改修を避けるため、描画先を差し替える
+const nullCtx = new Proxy({}, { get: () => () => {}, set: () => true });
+let ctx = screenCtx;
 
 const WORLD_HEIGHT = 400;
 const GROUND_Y = 360;
@@ -1859,13 +1862,38 @@ function drawGround() {
     ctx.fillRect(0, WORLD_HEIGHT, view.width, view.bottom - WORLD_HEIGHT);
 }
 
-// ゲームループ
-function gameLoop() {
+// 端末のリフレッシュレートや処理落ちに関係なく、ゲームは常に秒間 60 ステップで進める
+const TICK_MS = 1000 / 60;
+// タブ復帰時などに長時間分を一気に進めて即死しないよう、1 フレームで追いつく量に上限を設ける
+const MAX_TICKS_PER_FRAME = 4;
+let lastFrameAt = 0;
+let tickBacklog = 0;
+
+function startGameLoop() {
+    lastFrameAt = performance.now();
+    tickBacklog = 0;
+    requestAnimationFrame(gameLoop);
+}
+
+function gameLoop(now) {
+    tickBacklog = Math.min(tickBacklog + now - lastFrameAt, TICK_MS * MAX_TICKS_PER_FRAME);
+    lastFrameAt = now;
+    // 60Hz 画面で毎フレームの間隔がわずかに揺れても 0 回/2 回のステップにぶれないよう、半ステップ分を閾値にする
+    while (tickBacklog > TICK_MS / 2 && gameState === 'playing') {
+        tickBacklog -= TICK_MS;
+        ctx = tickBacklog > TICK_MS / 2 ? nullCtx : screenCtx;
+        tick();
+    }
+    ctx = screenCtx;
+
     if (gameState !== 'playing') {
         drawGameOver();
         return;
     }
+    requestAnimationFrame(gameLoop);
+}
 
+function tick() {
     applyWorldTransform();
 
     drawSky();
@@ -2296,8 +2324,6 @@ function gameLoop() {
             }
         }
     }
-
-    requestAnimationFrame(gameLoop);
 }
 
 function drawOverlay(lines) {
@@ -2355,7 +2381,7 @@ function startGame() {
     playStartSound();
     playMusic();
 
-    gameLoop();
+    startGameLoop();
 }
 
 // ジャンプ連打中のタップでゲームオーバー直後に即リスタートしてしまわないよう、少し待つ
