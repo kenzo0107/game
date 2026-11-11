@@ -6,14 +6,12 @@ cd "$(dirname "$0")"
 OUT_DIR="site"
 
 GAMES=(
-  "basketball|vite|3D バスケットボール"
-  "baybrade|vite|ベイブレードバトル"
-  "minecraft|vite|マインクラフト風ボクセル"
   "pilot|vite|パイロット"
   "nawabari|tsc|ナワバリバトル"
   "jump-runner|static|ジャンプランナー"
   "penalty-kick|static|サッカー PK"
   "soccer-throw-in|static|サッカー スローイン"
+  "bowling|vite|ボーリング"
 )
 
 rm -rf "$OUT_DIR"
