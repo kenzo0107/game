@@ -5,7 +5,9 @@ const ctx = canvas.getContext('2d');
 const WORLD_HEIGHT = 400;
 const GROUND_Y = 360;
 // 縦持ちでもキャラが小さくなりすぎないよう、横方向に見える範囲はこの幅まで狭める
-const MIN_VIEW_WIDTH = 640;
+const MIN_VIEW_WIDTH = 512;
+// キャラを大きく見せるため、雲しかない空の上端は横持ちで見切れてよいことにして拡大率を上げる
+const VISIBLE_WORLD_TOP = 80;
 // 縦持ちで余る縦方向の領域のうち、地面より下に回す割合
 const BELOW_GROUND_RATIO = 0.3;
 
@@ -19,11 +21,12 @@ function resizeCanvas() {
     canvas.width = Math.round(cssWidth * dpr);
     canvas.height = Math.round(cssHeight * dpr);
 
-    const scale = Math.min(cssHeight / WORLD_HEIGHT, cssWidth / MIN_VIEW_WIDTH);
-    const extra = cssHeight / scale - WORLD_HEIGHT;
+    const visibleHeight = WORLD_HEIGHT - VISIBLE_WORLD_TOP;
+    const scale = Math.min(cssHeight / visibleHeight, cssWidth / MIN_VIEW_WIDTH);
+    const extra = cssHeight / scale - visibleHeight;
     Object.assign(view, {
         width: cssWidth / scale,
-        top: -extra * (1 - BELOW_GROUND_RATIO),
+        top: VISIBLE_WORLD_TOP - extra * (1 - BELOW_GROUND_RATIO),
         bottom: WORLD_HEIGHT + extra * BELOW_GROUND_RATIO,
         scale,
         cssWidth,
@@ -145,11 +148,8 @@ class Player {
             this.doubleJumpTimer--;
             if (this.doubleJumpTimer <= 0) {
                 this.hasDoubleJump = false;
-                // BGMを通常に戻す
                 if (currentBgmType === 'happy') {
-                    stopMusic();
-                    currentBgmType = 'normal';
-                    playMusic();
+                    switchBgm('normal');
                 }
             }
         }
@@ -683,11 +683,12 @@ class Bullet {
 // 爆弾クラス
 class Bomb {
     constructor(x, y, direction = -1) {
-        this.x = x;
-        this.y = y;
-        this.width = 16;
-        this.height = 16;
-        this.speed = 4;
+        this.width = 28;
+        this.height = 28;
+        // checkCollision は x, y を左上として扱うため、中心座標で受け取った位置を左上に直す
+        this.x = x - this.width / 2;
+        this.y = y - this.height / 2;
+        this.speed = 2.5;
         this.alive = true;
         this.reflected = false; // ボスに向かっているか
 
@@ -707,8 +708,8 @@ class Bomb {
     reflectToBoss(boss) {
         this.reflected = true;
         // ボスの中心に向かう速度を計算
-        const dx = (boss.x + boss.width / 2) - this.x;
-        const dy = (boss.y + boss.height / 2) - this.y;
+        const dx = (boss.x + boss.width / 2) - (this.x + this.width / 2);
+        const dy = (boss.y + boss.height / 2) - (this.y + this.height / 2);
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         // 正規化して速度を設定（より速く）
@@ -719,30 +720,41 @@ class Bomb {
     draw() {
         if (!this.alive) return;
 
+        const cx = this.x + this.width / 2;
+        const cy = this.y + this.height / 2;
+        const r = this.width / 2;
+
         // 爆弾本体（黒い球）
         ctx.fillStyle = this.reflected ? '#ff8800' : '#333';
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.width / 2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fill();
 
         // 枠線
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
 
-        // 導火線
-        ctx.strokeStyle = this.reflected ? '#00ff00' : '#ff0000';
-        ctx.lineWidth = 2;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
         ctx.beginPath();
-        ctx.moveTo(this.x, this.y - this.height / 2);
-        ctx.lineTo(this.x + Math.sin(this.animationOffset) * 5, this.y - this.height / 2 - 8);
+        ctx.arc(cx - r / 3, cy - r / 3, r / 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 導火線
+        const fuseX = cx + Math.sin(this.animationOffset) * 6;
+        const fuseY = this.y - 10;
+        ctx.strokeStyle = this.reflected ? '#00ff00' : '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, this.y);
+        ctx.lineTo(fuseX, fuseY);
         ctx.stroke();
 
         // 火花
         if (Math.floor(this.animationOffset) % 2 === 0) {
             ctx.fillStyle = this.reflected ? '#00ff00' : '#ffff00';
             ctx.beginPath();
-            ctx.arc(this.x + Math.sin(this.animationOffset) * 5, this.y - this.height / 2 - 8, 3, 0, Math.PI * 2);
+            ctx.arc(fuseX, fuseY, 4, 0, Math.PI * 2);
             ctx.fill();
         }
     }
@@ -756,12 +768,14 @@ class Bomb {
 class Boss {
     constructor(level) {
         this.level = level;
-        // 狭い画面ではボスの左右移動がプレイヤー位置(x=100)まで届かないよう、中心を右に寄せる
-        this.x = Math.max(view.width / 2, 380) - 40;
         this.y = 280;
         this.width = 80;
         this.height = 80;
         this.alive = true;
+        // 固定の中心±200 だと狭い画面で右端からはみ出すため、画面幅から移動範囲を決める
+        const minX = 180;
+        const maxX = Math.max(view.width - this.width - 20, minX);
+        this.x = (minX + maxX) / 2;
 
         // HPは常に3（爆弾3発で倒せる）
         this.maxHp = 3;
@@ -769,7 +783,7 @@ class Boss {
         this.speed = 1 + level * 0.3; // 1.3, 1.6, 1.9...
 
         this.direction = 1; // 1: 右, -1: 左
-        this.moveRange = 200; // 移動範囲
+        this.moveRange = Math.min(200, (maxX - minX) / 2);
         this.centerX = this.x;
 
         // 攻撃関連
@@ -1709,6 +1723,53 @@ function playHappyMusic() {
     musicInterval = setInterval(playNextNote, beatDuration * 1000);
 }
 
+const battleMelodyPattern = [
+    440.00, 440.00, 523.25, 440.00, 587.33, 440.00, 659.25, 587.33,
+    440.00, 440.00, 523.25, 440.00, 783.99, 698.46, 659.25, 587.33,
+    440.00, 659.25, 880.00, 659.25, 698.46, 659.25, 587.33, 523.25,
+    587.33, 523.25, 493.88, 523.25, 587.33, 659.25, 698.46, 783.99,
+];
+
+const battleBassRoots = [110.00, 87.31, 98.00, 82.41];
+
+function playBattleMusic() {
+    if (!audioContext) return;
+
+    let noteIndex = 0;
+    const beatDuration = 0.11;
+
+    function playNextNote() {
+        const currentTime = audioContext.currentTime;
+
+        playTone(battleMelodyPattern[noteIndex % battleMelodyPattern.length], beatDuration, currentTime, 'sawtooth');
+
+        const root = battleBassRoots[Math.floor(noteIndex / 8) % battleBassRoots.length];
+        playTone(noteIndex % 2 === 0 ? root : root * 2, beatDuration, currentTime, 'square');
+
+        if (noteIndex % 4 === 0) {
+            playTone(55, 0.12, currentTime, 'sine');
+        } else if (noteIndex % 4 === 2) {
+            playTone(6000, 0.04, currentTime, 'square');
+        }
+
+        noteIndex++;
+    }
+
+    musicInterval = setInterval(playNextNote, beatDuration * 1000);
+}
+
+const bgmPlayers = { normal: playMusic, happy: playHappyMusic, battle: playBattleMusic };
+
+function switchBgm(type) {
+    stopMusic();
+    currentBgmType = type;
+    bgmPlayers[type]();
+}
+
+function bgmAfterBoss() {
+    return player.hasDoubleJump ? 'happy' : 'normal';
+}
+
 // 初期化
 function init() {
     obstacles = [];
@@ -1887,6 +1948,7 @@ function gameLoop() {
         bossLevel++;
         boss = new Boss(bossLevel);
         playBossAppearSound();
+        switchBgm('battle');
         // 次のボス出現スコアを設定
         nextBossScore += 3000;
     }
@@ -2140,6 +2202,7 @@ function gameLoop() {
                     score += 500; // スコアボーナス
                     playBossDefeatSound();
                     boss = null;
+                    switchBgm(bgmAfterBoss());
                 } else {
                     // ダメージ音
                     playStompSound();
@@ -2159,6 +2222,7 @@ function gameLoop() {
                 score += 500; // スコアボーナス
                 playBossDefeatSound();
                 boss = null;
+                switchBgm(bgmAfterBoss());
             } else {
                 // ダメージ音
                 playStompSound();
@@ -2184,10 +2248,9 @@ function gameLoop() {
                 player.hasDoubleJump = true;
                 player.doubleJumpTimer = 1800; // 30秒 (60fps * 30秒)
                 playItemSound();
-                // BGMをご機嫌な感じに変更
-                stopMusic();
-                currentBgmType = 'happy';
-                playHappyMusic();
+                if (!boss) {
+                    switchBgm('happy');
+                }
                 updateUI();
             } else if (items[i].type === 'shield') {
                 player.hasShield = true;
