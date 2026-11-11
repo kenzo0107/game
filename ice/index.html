@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ギリギリ氷すべり</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 2.2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 0.95em;
+        }
+
+        .score {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .score-item {
+            text-align: center;
+            min-width: 70px;
+        }
+
+        .score-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .score-value {
+            font-size: 1.6em;
+            font-weight: bold;
+            color: #0088cc;
+        }
+
+        .stage-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 8px;
+            padding: 0 4px;
+            min-height: 1.4em;
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            background: #2f8fd6;
+        }
+
+        .gauge-track {
+            position: relative;
+            width: 100%;
+            height: 34px;
+            border-radius: 17px;
+            background: linear-gradient(90deg, #ff4757 0%, #ffa502 20%, #2ed573 50%, #ffa502 80%, #ff4757 100%);
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 3px solid #333;
+        }
+
+        .gauge-marker {
+            position: absolute;
+            top: -3px;
+            width: 6px;
+            height: 40px;
+            background: #222;
+            border-radius: 3px;
+            left: 0%;
+        }
+
+        .stop-btn {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.3em;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .stop-btn:hover:not(:disabled) {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .stop-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result {
+            text-align: center;
+            font-size: 1.3em;
+            padding: 18px;
+            border-radius: 10px;
+            font-weight: bold;
+            min-height: 30px;
+        }
+
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .result.miss {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .result.gameover {
+            background: #f8d7da;
+            color: #721c24;
+            font-size: 1.6em;
+        }
+
+        .restart-btn {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.3em;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+
+        .restart-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐧 ギリギリ氷すべり</h1>
+        <p class="subtitle">パワーゲージがちょうどいいところでボタン（またはSpace）を押して、氷の際でピタッと止めよう！</p>
+
+        <div class="score">
+            <div class="score-item">
+                <div class="score-label">ステージ</div>
+                <div class="score-value" id="stage">1</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">スコア</div>
+                <div class="score-value" id="score">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">コンボ</div>
+                <div class="score-value" id="combo">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label">ハイスコア</div>
+                <div class="score-value" id="highScore">0</div>
+            </div>
+        </div>
+
+        <div class="stage-info">
+            <span id="iceInfo">氷質: ふつう</span>
+            <span id="windInfo"></span>
+        </div>
+
+        <canvas id="canvas" width="700" height="220"></canvas>
+
+        <div class="gauge-track" id="gaugeTrack">
+            <div class="gauge-marker" id="gaugeMarker"></div>
+        </div>
+
+        <button class="stop-btn" id="stopBtn">とめる！</button>
+
+        <div class="result" id="result">パワーゲージを見て、ボタンを押すタイミングを狙おう！</div>
+
+        <button class="restart-btn hidden" id="restartBtn">もういちど遊ぶ</button>
+    </div>
+
+    <script>
+        const CANVAS_W = 700;
+        const CANVAS_H = 220;
+        const START_X = 60;
+        const ICE_SURFACE_Y = 150;
+        const ICE_THICK = 34;
+        const MAX_SLIDE = 520;
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const gaugeTrack = document.getElementById('gaugeTrack');
+        const gaugeMarker = document.getElementById('gaugeMarker');
+        const stopBtn = document.getElementById('stopBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const resultDiv = document.getElementById('result');
+        const iceInfoSpan = document.getElementById('iceInfo');
+        const windInfoSpan = document.getElementById('windInfo');
+        const stageSpan = document.getElementById('stage');
+        const scoreSpan = document.getElementById('score');
+        const comboSpan = document.getElementById('combo');
+        const highScoreSpan = document.getElementById('highScore');
+
+        const HIGH_SCORE_KEY = 'ice-slide-high-score';
+
+        let state = {
+            stage: 1,
+            score: 0,
+            combo: 0,
+            highScore: Number(localStorage.getItem(HIGH_SCORE_KEY)) || 0,
+            trackLength: 0,
+            goalZoneWidth: 0,
+            iceEdgeX: 0,
+            goalZoneStartX: 0,
+            slip: 1,
+            iceLabel: 'ふつう',
+            cracks: [],
+            coin: null,
+            coinCollected: false,
+            wind: 0,
+            gaugePhase: 0,
+            gaugeSpeed: 1.4,
+            gaugeValue: 0,
+            gaugeRunning: false,
+            sliding: false,
+            gameOver: false,
+            charX: START_X,
+            charY: 0,
+            charRotation: 0
+        };
+
+        highScoreSpan.textContent = state.highScore;
+
+        function trackLengthForStage(stage) {
+            return Math.max(140, 480 - (stage - 1) * 22);
+        }
+
+        function goalZoneWidthForTrack(trackLength) {
+            return Math.max(26, Math.round(trackLength * 0.16));
+        }
+
+        function pickIceType() {
+            const slip = 0.85 + Math.random() * 0.4;
+            let label;
+            if (slip < 0.95) label = 'ざらざら（すべりにくい）';
+            else if (slip > 1.15) label = 'ツルツル（すべりやすい）';
+            else label = 'ふつう';
+            return { slip, label };
+        }
+
+        function generateCracks(stage, goalZoneStartX) {
+            const cracks = [];
+            const count = stage >= 6 ? 2 : stage >= 3 ? 1 : 0;
+            const minX = START_X + 50;
+            const maxX = goalZoneStartX - 30;
+            if (maxX <= minX) return cracks;
+
+            let guard = 0;
+            while (cracks.length < count && guard < 30) {
+                guard++;
+                const width = 18 + Math.random() * 10;
+                const x = minX + Math.random() * (maxX - minX - width);
+                const overlap = cracks.some(c => x < c.end + 25 && x + width > c.start - 25);
+                if (!overlap) {
+                    cracks.push({ start: x, end: x + width });
+                }
+            }
+            return cracks;
+        }
+
+        function generateCoin(stage, goalZoneStartX, cracks) {
+            if (stage < 2 || Math.random() > 0.6) return null;
+            const minX = START_X + 40;
+            const maxX = goalZoneStartX - 20;
+            if (maxX <= minX) return null;
+
+            let guard = 0;
+            while (guard < 20) {
+                guard++;
+                const x = minX + Math.random() * (maxX - minX);
+                const onCrack = cracks.some(c => x > c.start - 15 && x < c.end + 15);
+                if (!onCrack) return { x, collected: false };
+            }
+            return null;
+        }
+
+        function setupStage(stage) {
+            state.trackLength = trackLengthForStage(stage);
+            state.iceEdgeX = START_X + state.trackLength;
+            state.goalZoneWidth = goalZoneWidthForTrack(state.trackLength);
+            state.goalZoneStartX = state.iceEdgeX - state.goalZoneWidth;
+
+            const iceType = pickIceType();
+            state.slip = iceType.slip;
+            state.iceLabel = iceType.label;
+
+            state.cracks = generateCracks(stage, state.goalZoneStartX);
+            state.coin = generateCoin(stage, state.goalZoneStartX, state.cracks);
+
+            state.gaugeSpeed = Math.min(3.5, 1.4 + (stage - 1) * 0.1);
+
+            iceInfoSpan.textContent = `氷質: ${state.iceLabel}`;
+        }
+
+        function newAttempt() {
+            state.wind = state.stage >= 2 ? Math.round((Math.random() * 2 - 1) * (4 + Math.random() * 10)) : 0;
+            if (state.wind === 0 && state.stage >= 2) state.wind = Math.random() < 0.5 ? 5 : -5;
+
+            if (state.wind > 0) windInfoSpan.textContent = `🌬️ 追い風 →  強さ${state.wind}`;
+            else if (state.wind < 0) windInfoSpan.textContent = `🌬️ 向かい風 ←  強さ${Math.abs(state.wind)}`;
+            else windInfoSpan.textContent = '🌬️ 風なし';
+
+            state.charX = START_X;
+            state.charY = 0;
+            state.charRotation = 0;
+            state.sliding = false;
+
+            stopBtn.disabled = false;
+            startGauge();
+            drawScene();
+        }
+
+        function startGauge() {
+            state.gaugeRunning = true;
+            state.gaugePhase = 0;
+            const t0 = performance.now();
+            function loop() {
+                if (!state.gaugeRunning) return;
+                const t = (performance.now() - t0) / 1000;
+                state.gaugeValue = (Math.sin(t * state.gaugeSpeed) + 1) / 2 * 100;
+                gaugeMarker.style.left = state.gaugeValue + '%';
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function lockPower() {
+            if (!state.gaugeRunning || state.sliding || state.gameOver) return;
+            state.gaugeRunning = false;
+            stopBtn.disabled = true;
+            resolveSlide(state.gaugeValue);
+        }
+
+        function resolveSlide(power) {
+            const rawDistance = (power / 100) * MAX_SLIDE;
+            const distance = rawDistance * state.slip + state.wind;
+            let finalX = START_X + distance;
+            if (finalX < START_X) finalX = START_X;
+
+            const crossedCoin = state.coin && !state.coin.collected && finalX >= state.coin.x;
+
+            let outcome;
+            if (finalX >= state.iceEdgeX) {
+                outcome = 'fall-edge';
+            } else if (state.cracks.some(c => finalX >= c.start && finalX <= c.end)) {
+                outcome = 'fall-crack';
+            } else if (finalX >= state.goalZoneStartX) {
+                outcome = 'success';
+            } else {
+                outcome = 'miss';
+            }
+
+            animateSlide(finalX, outcome, crossedCoin);
+        }
+
+        function animateSlide(finalX, outcome, crossedCoin) {
+            state.sliding = true;
+            const startX = START_X;
+            const isFall = outcome === 'fall-edge' || outcome === 'fall-crack';
+            const stopX = outcome === 'fall-edge' ? Math.min(finalX, CANVAS_W - 40) : finalX;
+            const duration = Math.max(500, Math.min(1300, Math.abs(stopX - startX) * 2.2));
+            const start = Date.now();
+
+            function easeOutQuad(t) { return 1 - (1 - t) * (1 - t); }
+
+            function step() {
+                const now = Date.now();
+                const t = Math.min(1, (now - start) / duration);
+                const eased = easeOutQuad(t);
+                state.charX = startX + (stopX - startX) * eased;
+
+                if (crossedCoin && state.coin && !state.coin.collected && state.charX >= state.coin.x) {
+                    state.coin.collected = true;
+                    state.coinCollected = true;
+                    state.score += 20;
+                    scoreSpan.textContent = state.score;
+                }
+
+                drawScene();
+
+                if (t < 1) {
+                    requestAnimationFrame(step);
+                } else if (isFall) {
+                    fallAnimation(outcome);
+                } else {
+                    finishAttempt(outcome);
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        function fallAnimation(outcome) {
+            const start = Date.now();
+            const duration = 700;
+            const startX = state.charX;
+            const targetX = outcome === 'fall-edge' ? Math.min(startX + 60, CANVAS_W - 20) : startX;
+
+            function step() {
+                const now = Date.now();
+                const t = Math.min(1, (now - start) / duration);
+                state.charX = startX + (targetX - startX) * t;
+                state.charY = 90 * t * t;
+                state.charRotation = t * 200;
+                drawScene();
+                if (t < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    finishAttempt(outcome);
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        function finishAttempt(outcome) {
+            state.sliding = false;
+
+            if (outcome === 'success') {
+                state.combo++;
+                const distanceFromEdge = state.iceEdgeX - state.charX;
+                const proximity = Math.max(0, Math.min(1, 1 - distanceFromEdge / state.goalZoneWidth));
+                const precisionBonus = Math.round(proximity * 100);
+                const comboMultiplier = 1 + Math.min(state.combo - 1, 9) * 0.1;
+                const gained = Math.round((100 + precisionBonus) * comboMultiplier);
+                state.score += gained;
+
+                scoreSpan.textContent = state.score;
+                comboSpan.textContent = state.combo;
+
+                resultDiv.className = 'result success';
+                resultDiv.textContent = `🎉 ナイスストップ！ +${gained}点（コンボ x${state.combo}）`;
+
+                state.stage++;
+                stageSpan.textContent = state.stage;
+
+                setTimeout(() => {
+                    setupStage(state.stage);
+                    newAttempt();
+                }, 1400);
+
+            } else if (outcome === 'miss') {
+                state.combo = 0;
+                comboSpan.textContent = state.combo;
+                resultDiv.className = 'result miss';
+                resultDiv.textContent = '😅 ゴールに届かなかった…もう一度狙おう！';
+
+                setTimeout(() => {
+                    newAttempt();
+                }, 1200);
+
+            } else {
+                state.gameOver = true;
+                const message = outcome === 'fall-edge'
+                    ? '🌊 氷から落ちてしまった…'
+                    : '💥 ひびが割れて氷に沈んでしまった…';
+
+                if (state.score > state.highScore) {
+                    state.highScore = state.score;
+                    localStorage.setItem(HIGH_SCORE_KEY, String(state.highScore));
+                    highScoreSpan.textContent = state.highScore;
+                }
+
+                resultDiv.className = 'result gameover';
+                resultDiv.textContent = `${message} ステージ${state.stage}・スコア${state.score}点でゲームオーバー！`;
+
+                stopBtn.classList.add('hidden');
+                restartBtn.classList.remove('hidden');
+            }
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+            const waterGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+            waterGradient.addColorStop(0, '#6ec6f5');
+            waterGradient.addColorStop(1, '#1a6faa');
+            ctx.fillStyle = waterGradient;
+            ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+            ctx.fillStyle = '#7bbf5e';
+            ctx.fillRect(0, ICE_SURFACE_Y, START_X, ICE_THICK);
+
+            ctx.fillStyle = '#eaf7ff';
+            ctx.fillRect(START_X, ICE_SURFACE_Y, state.trackLength, ICE_THICK);
+            ctx.strokeStyle = '#b8dff0';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(START_X, ICE_SURFACE_Y, state.trackLength, ICE_THICK);
+
+            ctx.fillStyle = 'rgba(255, 209, 102, 0.55)';
+            ctx.fillRect(state.goalZoneStartX, ICE_SURFACE_Y, state.goalZoneWidth, ICE_THICK);
+            ctx.strokeStyle = '#e08e00';
+            ctx.setLineDash([5, 4]);
+            ctx.strokeRect(state.goalZoneStartX, ICE_SURFACE_Y, state.goalZoneWidth, ICE_THICK);
+            ctx.setLineDash([]);
+
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 3;
+            state.cracks.forEach(c => {
+                ctx.beginPath();
+                const midY = ICE_SURFACE_Y + ICE_THICK / 2;
+                ctx.moveTo(c.start, ICE_SURFACE_Y + 2);
+                ctx.lineTo((c.start + c.end) / 2, midY);
+                ctx.lineTo(c.end, ICE_SURFACE_Y + ICE_THICK - 2);
+                ctx.stroke();
+            });
+
+            if (state.coin && !state.coin.collected) {
+                ctx.font = '26px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('💎', state.coin.x, ICE_SURFACE_Y - 8);
+            }
+
+            ctx.font = '20px sans-serif';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'left';
+            ctx.fillText('🚩', START_X - 14, ICE_SURFACE_Y - 6);
+            ctx.fillText('🏁', state.iceEdgeX - 10, ICE_SURFACE_Y - 6);
+
+            ctx.save();
+            ctx.translate(state.charX, ICE_SURFACE_Y - 6 + state.charY);
+            ctx.rotate((state.charRotation * Math.PI) / 180);
+            ctx.font = '34px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('🐧', 0, 0);
+            ctx.restore();
+        }
+
+        function resetGame() {
+            state.stage = 1;
+            state.score = 0;
+            state.combo = 0;
+            state.gameOver = false;
+
+            stageSpan.textContent = state.stage;
+            scoreSpan.textContent = state.score;
+            comboSpan.textContent = state.combo;
+
+            stopBtn.classList.remove('hidden');
+            restartBtn.classList.add('hidden');
+            resultDiv.className = 'result';
+            resultDiv.textContent = 'パワーゲージを見て、ボタンを押すタイミングを狙おう！';
+
+            setupStage(state.stage);
+            newAttempt();
+        }
+
+        stopBtn.addEventListener('click', lockPower);
+        restartBtn.addEventListener('click', resetGame);
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                lockPower();
+            }
+        });
+
+        setupStage(state.stage);
+        newAttempt();
+    </script>
+</body>
+</html>

@@ -8,7 +8,6 @@ export class CameraController {
   private controls: OrbitControls;
   private mode: CameraMode = 'free';
   private targetPosition = new THREE.Vector3();
-  private currentVelocity = new THREE.Vector3();
 
   private cameraPresets: Record<CameraMode, { position: THREE.Vector3; lookAt: THREE.Vector3 }> = {
     free: {

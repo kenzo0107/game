@@ -2,14 +2,14 @@ import { defineConfig } from 'vite'
 import path from 'path'
 
 export default defineConfig({
+  base: './',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')
     }
   },
   build: {
-    target: 'esnext',
-    minify: 'terser'
+    target: 'esnext'
   },
   server: {
     port: 3000,

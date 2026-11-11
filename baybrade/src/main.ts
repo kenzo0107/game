@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { BeybladeType, BeybladeStats } from './types';
+import { BeybladeType } from './types';
 import { Beyblade } from './Beyblade';
 import { Stadium } from './Stadium';
 import { ParticleSystem } from './ParticleSystem';
-import { CameraController, CameraMode } from './CameraController';
+import { CameraController } from './CameraController';
 import { TimeController } from './TimeController';
 
 class BeybladeGame {
@@ -17,7 +17,6 @@ class BeybladeGame {
 
   private beyblade1: Beyblade | null = null;
   private beyblade2: Beyblade | null = null;
-  private stadium: Stadium | null = null;
 
   private particleSystem: ParticleSystem;
   private cameraController: CameraController;
@@ -74,7 +73,7 @@ class BeybladeGame {
     this.setupEventListeners();
 
     // スタジアム作成
-    this.stadium = new Stadium(this.scene, this.world);
+    new Stadium(this.scene, this.world);
 
     // アニメーションループ開始
     this.animate();
