@@ -20,6 +20,8 @@ const SPECIAL_BRUSH_RADIUS = 45;
 const EDGE_MARGIN = 8;
 const STRIDE_PER_PX = 0.09; // 走りの1周期 ≒ 70px
 const FIGURE_HEIGHT = 74;
+// 足元より上にキャラを描くため、盤面上端にいても頭が切れないよう奥の壁として余白を取る
+const BACK_WALL = 80;
 const MAX_RENDER_SCALE = 1.5; // 高DPI端末で全画面合成を毎フレーム行っても重くならない上限
 
 // 色定義
@@ -144,19 +146,24 @@ class Game {
     private fitArena(): void {
         const field = document.querySelector('.field') as HTMLElement;
         const aspect = Math.max(0.5, Math.min(2, (field.clientWidth || 4) / (field.clientHeight || 3)));
-        this.width = Math.round(Math.sqrt(ARENA_AREA * aspect) / GRID_SIZE) * GRID_SIZE;
-        this.height = Math.round(Math.sqrt(ARENA_AREA / aspect) / GRID_SIZE) * GRID_SIZE;
+        const arenaHeight =
+            (-aspect * BACK_WALL + Math.sqrt((aspect * BACK_WALL) ** 2 + 4 * aspect * ARENA_AREA)) / (2 * aspect);
+        this.height = Math.round(arenaHeight / GRID_SIZE) * GRID_SIZE;
+        this.width = Math.round((aspect * (this.height + BACK_WALL)) / GRID_SIZE) * GRID_SIZE;
         this.cols = this.width / GRID_SIZE;
         this.rows = this.height / GRID_SIZE;
-        (document.querySelector('.board') as HTMLElement).style.setProperty('--aspect', `${this.width / this.height}`);
+        const boardAspect = this.width / (this.height + BACK_WALL);
+        (document.querySelector('.board') as HTMLElement).style.setProperty('--aspect', `${boardAspect}`);
 
-        const cssWidth = Math.min(field.clientWidth, field.clientHeight * (this.width / this.height)) || this.width;
+        const cssWidth = Math.min(field.clientWidth, field.clientHeight * boardAspect) || this.width;
         this.scale = Math.max(1, Math.min(MAX_RENDER_SCALE, (cssWidth * devicePixelRatio) / this.width));
-        for (const layer of [this.canvas, this.ground, this.paintLayer, this.fxLayer]) {
-            layer.width = Math.round(this.width * this.scale);
+        this.canvas.width = Math.round(this.width * this.scale);
+        this.canvas.height = Math.round((this.height + BACK_WALL) * this.scale);
+        for (const layer of [this.ground, this.paintLayer, this.fxLayer]) {
+            layer.width = this.canvas.width;
             layer.height = Math.round(this.height * this.scale);
         }
-        for (const ctx of [this.ctx, this.groundCtx, this.paintCtx]) {
+        for (const ctx of [this.groundCtx, this.paintCtx]) {
             ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
         }
         this.drawGround();
@@ -542,8 +549,10 @@ class Game {
         const size = 2 + Math.random() * radius * 0.3;
         p.fillStyle = hsl(fighter.paint);
         p.beginPath();
-        p.arc(center.x + Math.cos(angle) * reach, center.y + Math.sin(angle) * reach, size, 0, Math.PI * 2);
+        const splat = { x: center.x + Math.cos(angle) * reach, y: center.y + Math.sin(angle) * reach };
+        p.arc(splat.x, splat.y, size, 0, Math.PI * 2);
         p.fill();
+        this.paintSplatGrid(fighter.owner, splat, size);
     }
 
     private burstSplat(fighter: Fighter, center: Position, radius: number, droplets: number): void {
@@ -571,8 +580,14 @@ class Game {
             p.beginPath();
             p.arc(x, y, size * 0.9, 0, Math.PI * 2);
             p.fill();
+            this.paintSplatGrid(fighter.owner, { x, y }, size * 0.9);
         }
         this.paintGrid(fighter.owner, center, radius);
+    }
+
+    // セル中心だけで判定すると小さな飛沫はほぼ登録されず、見た目は塗れているのに得点にならないため、半セル分広げて判定する
+    private paintSplatGrid(owner: CellOwner, center: Position, size: number): void {
+        this.paintGrid(owner, center, size + GRID_SIZE / 2);
     }
 
     private paintGrid(owner: CellOwner, center: Position, radius: number): void {
@@ -594,8 +609,15 @@ class Game {
 
     private draw(): void {
         const ctx = this.ctx;
+        ctx.setTransform(this.scale, 0, 0, this.scale, 0, this.wallOffset());
+        this.drawBackWall();
         ctx.drawImage(this.ground, 0, 0, this.width, this.height);
         this.drawPaint();
+        const wallShadow = ctx.createLinearGradient(0, 0, 0, 14);
+        wallShadow.addColorStop(0, 'rgba(0, 0, 0, 0.3)');
+        wallShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = wallShadow;
+        ctx.fillRect(0, 0, this.width, 14);
 
         // アイテム描画
         this.drawItems();
@@ -636,7 +658,7 @@ class Game {
         };
 
         ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.setTransform(1, 0, 0, 1, 0, this.wallOffset());
 
         silhouette('rgba(0, 0, 0, 0.22)', 0, 0);
         ctx.drawImage(this.fxLayer, offset, offset * 1.5);
@@ -650,6 +672,28 @@ class Game {
         ctx.drawImage(this.fxLayer, 0, 0);
 
         ctx.restore();
+    }
+
+    // 塗り層を端数のピクセル位置に重ねると毎フレーム補間されて縁がぼけるため、整数に揃える
+    private wallOffset(): number {
+        return Math.round(BACK_WALL * this.scale);
+    }
+
+    private drawBackWall(): void {
+        const ctx = this.ctx;
+        const wall = ctx.createLinearGradient(0, -BACK_WALL, 0, 0);
+        wall.addColorStop(0, '#1e293b');
+        wall.addColorStop(1, '#475569');
+        ctx.fillStyle = wall;
+        ctx.fillRect(0, -BACK_WALL, this.width, BACK_WALL);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        for (let x = 0; x < this.width; x += 40) {
+            ctx.fillRect(x, -BACK_WALL, 20, BACK_WALL);
+        }
+
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(0, -6, this.width, 6);
     }
 
     private drawShadow(fighter: Fighter): void {
