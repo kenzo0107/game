@@ -1,10 +1,6 @@
 // ゲーム定数
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 600;
+const ARENA_AREA = 800 * 600; // 盤面の向きを画面に合わせても、塗る総面積（難易度）は変えない
 const GRID_SIZE = 10;
-const COLS = CANVAS_WIDTH / GRID_SIZE;
-const ROWS = CANVAS_HEIGHT / GRID_SIZE;
-const PLAYER_SIZE = GRID_SIZE;
 const GAME_DURATION = 60; // 秒
 const PLAYER_SPEED = 1.5; // それ以外のエリアでは少し遅く
 const PLAYER_SPEED_BOOST = 4; // 自分の色の上では速く移動
@@ -19,6 +15,12 @@ const MAX_FRAME_STEP = 3; // タブ復帰直後などに一気にワープしな
 const CPU_RETARGET_MS = 2000;
 const STICK_RADIUS = 50; // CSS px
 const STICK_DEAD_ZONE = 0.12;
+const BRUSH_RADIUS = 25;
+const SPECIAL_BRUSH_RADIUS = 45;
+const EDGE_MARGIN = 8;
+const STRIDE_PER_PX = 0.09; // 走りの1周期 ≒ 70px
+const FIGURE_HEIGHT = 74;
+const MAX_RENDER_SCALE = 1.5; // 高DPI端末で全画面合成を毎フレーム行っても重くならない上限
 
 // 色定義
 enum CellOwner {
@@ -32,11 +34,24 @@ interface Position {
     y: number;
 }
 
-interface Player {
+interface Hsl {
+    h: number;
+    s: number;
+    l: number;
+}
+
+// 体の中心ではなく足元を座標にするのは、塗る位置と影を地面に接する点に揃えるため
+interface Fighter {
     x: number;
     y: number;
     color: string;
+    paint: Hsl;
     owner: CellOwner;
+    facing: 1 | -1;
+    runPhase: number;
+    runBlend: number;
+    lastStep: Position;
+    splatDistance: number;
 }
 
 interface Item {
@@ -45,12 +60,31 @@ interface Item {
     active: boolean;
 }
 
+const hsl = ({ h, s, l }: Hsl, dl = 0, alpha = 1): string =>
+    `hsla(${h}, ${s}%, ${Math.max(0, Math.min(100, l + dl))}%, ${alpha})`;
+
+const createLayer = (): [HTMLCanvasElement, CanvasRenderingContext2D] => {
+    const canvas = document.createElement('canvas');
+    return [canvas, canvas.getContext('2d')!];
+};
+
 class Game {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
+    private width = 800;
+    private height = 600;
+    private cols = 80;
+    private rows = 60;
+    private scale = 1;
+    private ground: HTMLCanvasElement;
+    private groundCtx: CanvasRenderingContext2D;
+    private paintLayer: HTMLCanvasElement;
+    private paintCtx: CanvasRenderingContext2D;
+    private fxLayer: HTMLCanvasElement;
+    private fxCtx: CanvasRenderingContext2D;
     private grid: CellOwner[][];
-    private player: Player;
-    private cpu: Player;
+    private player: Fighter;
+    private cpu: Fighter;
     private keys: Set<string>;
     private gameRunning: boolean;
     private timeLeft: number;
@@ -63,10 +97,15 @@ class Game {
     private specialEndTime: number;
     private stick: Position = { x: 0, y: 0 };
     private lastFrameTime = 0;
+    private cpuTarget: Position | null = null;
+    private cpuTargetTimer = 0;
 
     constructor() {
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d')!;
+        [this.ground, this.groundCtx] = createLayer();
+        [this.paintLayer, this.paintCtx] = createLayer();
+        [this.fxLayer, this.fxCtx] = createLayer();
         this.grid = [];
         this.keys = new Set();
         this.gameRunning = false;
@@ -79,33 +118,81 @@ class Game {
         this.specialActive = false;
         this.specialEndTime = 0;
 
-        // プレイヤー初期化
-        this.player = {
-            x: CANVAS_WIDTH * 0.25,
-            y: CANVAS_HEIGHT * 0.5,
-            color: '#3b82f6',
-            owner: CellOwner.PLAYER
-        };
+        this.player = this.createFighter('#3b82f6', { h: 217, s: 90, l: 55 }, CellOwner.PLAYER, 1);
+        this.cpu = this.createFighter('#ef4444', { h: 2, s: 85, l: 56 }, CellOwner.CPU, -1);
 
-        // CPU初期化
-        this.cpu = {
-            x: CANVAS_WIDTH * 0.75,
-            y: CANVAS_HEIGHT * 0.5,
-            color: '#ef4444',
-            owner: CellOwner.CPU
-        };
-
-        this.initGrid();
         this.setupEventListeners();
-        this.updateSpecialGaugeUI();
-        this.draw();
+        this.resetGame();
+    }
+
+    private createFighter(color: string, paint: Hsl, owner: CellOwner, facing: 1 | -1): Fighter {
+        return {
+            x: 0,
+            y: 0,
+            color,
+            paint,
+            owner,
+            facing,
+            runPhase: 0,
+            runBlend: 0,
+            lastStep: { x: 0, y: 0 },
+            splatDistance: 0
+        };
+    }
+
+    // 縦長のスマホでは横長固定の盤面だと上下が大きく余るため、盤面の縦横比を表示領域に合わせる
+    private fitArena(): void {
+        const field = document.querySelector('.field') as HTMLElement;
+        const aspect = Math.max(0.5, Math.min(2, (field.clientWidth || 4) / (field.clientHeight || 3)));
+        this.width = Math.round(Math.sqrt(ARENA_AREA * aspect) / GRID_SIZE) * GRID_SIZE;
+        this.height = Math.round(Math.sqrt(ARENA_AREA / aspect) / GRID_SIZE) * GRID_SIZE;
+        this.cols = this.width / GRID_SIZE;
+        this.rows = this.height / GRID_SIZE;
+        (document.querySelector('.board') as HTMLElement).style.setProperty('--aspect', `${this.width / this.height}`);
+
+        const cssWidth = Math.min(field.clientWidth, field.clientHeight * (this.width / this.height)) || this.width;
+        this.scale = Math.max(1, Math.min(MAX_RENDER_SCALE, (cssWidth * devicePixelRatio) / this.width));
+        for (const layer of [this.canvas, this.ground, this.paintLayer, this.fxLayer]) {
+            layer.width = Math.round(this.width * this.scale);
+            layer.height = Math.round(this.height * this.scale);
+        }
+        for (const ctx of [this.ctx, this.groundCtx, this.paintCtx]) {
+            ctx.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+        }
+        this.drawGround();
+    }
+
+    private drawGround(): void {
+        const g = this.groundCtx;
+        g.fillStyle = '#d9d6cf';
+        g.fillRect(0, 0, this.width, this.height);
+
+        for (let i = 0; i < (this.width * this.height) / 60; i++) {
+            const shade = Math.random() < 0.5 ? 0 : 255;
+            g.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${Math.random() * 0.08})`;
+            g.fillRect(Math.random() * this.width, Math.random() * this.height, 1.5, 1.5);
+        }
+
+        const slab = 100;
+        g.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+        g.lineWidth = 2;
+        g.beginPath();
+        for (let x = slab; x < this.width; x += slab) {
+            g.moveTo(x, 0);
+            g.lineTo(x, this.height);
+        }
+        for (let y = slab; y < this.height; y += slab) {
+            g.moveTo(0, y);
+            g.lineTo(this.width, y);
+        }
+        g.stroke();
     }
 
     private initGrid(): void {
         this.grid = [];
-        for (let row = 0; row < ROWS; row++) {
+        for (let row = 0; row < this.rows; row++) {
             this.grid[row] = [];
-            for (let col = 0; col < COLS; col++) {
+            for (let col = 0; col < this.cols; col++) {
                 this.grid[row][col] = CellOwner.NONE;
             }
         }
@@ -140,6 +227,11 @@ class Game {
         window.addEventListener('blur', () => {
             this.keys.clear();
             this.releaseStick();
+        });
+
+        // 試合中や結果表示中に作り直すと塗った跡が消えるため、開始前だけ画面の向きに追従する
+        window.addEventListener('resize', () => {
+            if (document.getElementById('startOverlay')!.classList.contains('show')) this.resetGame();
         });
 
         this.setupStick();
@@ -269,11 +361,13 @@ class Game {
         this.releaseStick();
         this.cpuTarget = null;
 
+        this.fitArena();
+        this.paintCtx.clearRect(0, 0, this.width, this.height);
+
         // プレイヤー位置リセット
-        this.player.x = CANVAS_WIDTH * 0.25;
-        this.player.y = CANVAS_HEIGHT * 0.5;
-        this.cpu.x = CANVAS_WIDTH * 0.75;
-        this.cpu.y = CANVAS_HEIGHT * 0.5;
+        const portrait = this.height > this.width;
+        this.placeFighter(this.player, portrait ? 0.5 : 0.25, portrait ? 0.75 : 0.5, 1);
+        this.placeFighter(this.cpu, portrait ? 0.5 : 0.75, portrait ? 0.25 : 0.5, -1);
 
         // グリッドリセット
         this.initGrid();
@@ -290,6 +384,16 @@ class Game {
         this.updateSpecialGaugeUI();
 
         this.draw();
+    }
+
+    private placeFighter(fighter: Fighter, rx: number, ry: number, facing: 1 | -1): void {
+        fighter.x = this.width * rx;
+        fighter.y = this.height * ry;
+        fighter.facing = facing;
+        fighter.runPhase = 0;
+        fighter.runBlend = 0;
+        fighter.lastStep = { x: fighter.x, y: fighter.y };
+        fighter.splatDistance = 0;
     }
 
     private gameLoop = (now: number): void => {
@@ -320,9 +424,10 @@ class Game {
             this.updateSpecialGaugeUI();
         }
 
-        // グリッド更新
-        this.paintCell(this.player);
-        this.paintCell(this.cpu);
+        this.paintTrail(this.cpu);
+        this.paintTrail(this.player);
+        this.animateRun(this.player, frames);
+        this.animateRun(this.cpu, frames);
 
         // スコア更新
         this.updateScores();
@@ -343,195 +448,334 @@ class Game {
         return length > 1 ? { x: x / length, y: y / length } : { x, y };
     }
 
-    private updatePlayerPosition(frames: number): void {
-        // 現在のグリッド位置を確認
-        const gridX = Math.floor(this.player.x / GRID_SIZE);
-        const gridY = Math.floor(this.player.y / GRID_SIZE);
-        const isOnOwnColor = this.grid[gridY]?.[gridX] === CellOwner.PLAYER;
+    private ownerAt(fighter: Fighter): CellOwner {
+        return this.grid[Math.floor(fighter.y / GRID_SIZE)]?.[Math.floor(fighter.x / GRID_SIZE)] ?? CellOwner.NONE;
+    }
 
+    private moveFighter(fighter: Fighter, dx: number, dy: number): void {
+        fighter.x = Math.max(EDGE_MARGIN, Math.min(this.width - EDGE_MARGIN, fighter.x + dx));
+        fighter.y = Math.max(EDGE_MARGIN, Math.min(this.height - EDGE_MARGIN, fighter.y + dy));
+    }
+
+    private updatePlayerPosition(frames: number): void {
         // 自分の色の上なら速度アップ
+        const isOnOwnColor = this.ownerAt(this.player) === CellOwner.PLAYER;
         const speed = (isOnOwnColor ? PLAYER_SPEED_BOOST : PLAYER_SPEED) * frames;
 
         const input = this.readMoveInput();
-        const dx = input.x * speed;
-        const dy = input.y * speed;
-
-        this.player.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_SIZE, this.player.x + dx));
-        this.player.y = Math.max(0, Math.min(CANVAS_HEIGHT - PLAYER_SIZE, this.player.y + dy));
+        this.moveFighter(this.player, input.x * speed, input.y * speed);
     }
-
-    private cpuTarget: Position | null = null;
-    private cpuTargetTimer = 0;
 
     private updateCPUPosition(frames: number): void {
         // 一定時間ごとにランダムな目標地点を設定
         this.cpuTargetTimer += frames * FRAME_MS;
         if (!this.cpuTarget || this.cpuTargetTimer > CPU_RETARGET_MS) {
             this.cpuTarget = {
-                x: Math.random() * (CANVAS_WIDTH - PLAYER_SIZE),
-                y: Math.random() * (CANVAS_HEIGHT - PLAYER_SIZE)
+                x: EDGE_MARGIN + Math.random() * (this.width - EDGE_MARGIN * 2),
+                y: EDGE_MARGIN + Math.random() * (this.height - EDGE_MARGIN * 2)
             };
             this.cpuTargetTimer = 0;
         }
 
-        // 現在のグリッド位置を確認
-        const gridX = Math.floor(this.cpu.x / GRID_SIZE);
-        const gridY = Math.floor(this.cpu.y / GRID_SIZE);
-        const isOnOwnColor = this.grid[gridY]?.[gridX] === CellOwner.CPU;
-
         // 自分の色の上なら速度アップ
+        const isOnOwnColor = this.ownerAt(this.cpu) === CellOwner.CPU;
         const speed = (isOnOwnColor ? CPU_SPEED_BOOST : CPU_SPEED) * frames;
 
         // 目標地点に向かって移動
         const dx = this.cpuTarget.x - this.cpu.x;
         const dy = this.cpuTarget.y - this.cpu.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distance = Math.hypot(dx, dy);
 
         if (distance > speed) {
-            this.cpu.x += (dx / distance) * speed;
-            this.cpu.y += (dy / distance) * speed;
+            this.moveFighter(this.cpu, (dx / distance) * speed, (dy / distance) * speed);
         }
-
-        this.cpu.x = Math.max(0, Math.min(CANVAS_WIDTH - PLAYER_SIZE, this.cpu.x));
-        this.cpu.y = Math.max(0, Math.min(CANVAS_HEIGHT - PLAYER_SIZE, this.cpu.y));
     }
 
-    private paintCell(player: Player): void {
-        const gridX = Math.floor(player.x / GRID_SIZE);
-        const gridY = Math.floor(player.y / GRID_SIZE);
+    private animateRun(fighter: Fighter, frames: number): void {
+        const dx = fighter.x - fighter.lastStep.x;
+        const dy = fighter.y - fighter.lastStep.y;
+        const distance = Math.hypot(dx, dy);
+        fighter.lastStep = { x: fighter.x, y: fighter.y };
 
-        // 塗る範囲の半径（必殺技発動中はプレイヤーのみ2倍）
-        let paintRadius = 2;
-        if (player.owner === CellOwner.PLAYER && this.specialActive) {
-            paintRadius = 4; // 必殺技中は9x9の範囲
+        if (Math.abs(dx) > 0.05 * frames) fighter.facing = dx > 0 ? 1 : -1;
+        fighter.runPhase += distance * STRIDE_PER_PX;
+        const target = distance > 0.2 * frames ? 1 : 0;
+        fighter.runBlend += (target - fighter.runBlend) * Math.min(1, 0.2 * frames);
+    }
+
+    private brushRadius(fighter: Fighter): number {
+        return fighter.owner === CellOwner.PLAYER && this.specialActive ? SPECIAL_BRUSH_RADIUS : BRUSH_RADIUS;
+    }
+
+    private paintTrail(fighter: Fighter): void {
+        const radius = this.brushRadius(fighter);
+        const from = fighter.lastStep;
+        const to = { x: fighter.x, y: fighter.y };
+        const distance = Math.hypot(to.x - from.x, to.y - from.y);
+
+        const p = this.paintCtx;
+        p.lineCap = 'round';
+        p.strokeStyle = hsl(fighter.paint);
+        p.lineWidth = radius * 2;
+        p.beginPath();
+        p.moveTo(from.x, from.y);
+        p.lineTo(to.x + 0.01, to.y);
+        p.stroke();
+
+        fighter.splatDistance += distance;
+        while (fighter.splatDistance > 7) {
+            fighter.splatDistance -= 7;
+            this.edgeSplat(fighter, to, radius);
+        }
+        if (distance > 0 && Math.random() < 0.025) {
+            this.burstSplat(fighter, to, radius * 0.9, 6);
         }
 
-        // プレイヤーの位置を中心に周囲も塗る
-        for (let dy = -paintRadius; dy <= paintRadius; dy++) {
-            for (let dx = -paintRadius; dx <= paintRadius; dx++) {
-                const targetX = gridX + dx;
-                const targetY = gridY + dy;
+        this.paintGrid(fighter.owner, to, radius);
+    }
 
-                // グリッド範囲内かチェック
-                if (targetX >= 0 && targetX < COLS && targetY >= 0 && targetY < ROWS) {
-                    this.grid[targetY][targetX] = player.owner;
+    // 円形のストロークだけだと輪郭が機械的になるため、縁に飛沫を散らしてペンキらしいギザつきを出す
+    private edgeSplat(fighter: Fighter, center: Position, radius: number): void {
+        const p = this.paintCtx;
+        const angle = Math.random() * Math.PI * 2;
+        const reach = radius * (0.8 + Math.random() * 0.45);
+        const size = 2 + Math.random() * radius * 0.3;
+        p.fillStyle = hsl(fighter.paint);
+        p.beginPath();
+        p.arc(center.x + Math.cos(angle) * reach, center.y + Math.sin(angle) * reach, size, 0, Math.PI * 2);
+        p.fill();
+    }
+
+    private burstSplat(fighter: Fighter, center: Position, radius: number, droplets: number): void {
+        const p = this.paintCtx;
+        p.fillStyle = hsl(fighter.paint);
+        p.beginPath();
+        p.arc(center.x, center.y, radius, 0, Math.PI * 2);
+        p.fill();
+
+        for (let i = 0; i < droplets; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const reach = radius * (1.1 + Math.random() * 1.2);
+            const x = center.x + Math.cos(angle) * reach;
+            const y = center.y + Math.sin(angle) * reach;
+            const size = 2 + Math.random() * radius * 0.25;
+
+            p.strokeStyle = hsl(fighter.paint);
+            p.lineWidth = size;
+            p.lineCap = 'round';
+            p.beginPath();
+            p.moveTo(center.x + Math.cos(angle) * radius * 0.8, center.y + Math.sin(angle) * radius * 0.8);
+            p.lineTo(x, y);
+            p.stroke();
+
+            p.beginPath();
+            p.arc(x, y, size * 0.9, 0, Math.PI * 2);
+            p.fill();
+        }
+        this.paintGrid(fighter.owner, center, radius);
+    }
+
+    private paintGrid(owner: CellOwner, center: Position, radius: number): void {
+        const minCol = Math.max(0, Math.floor((center.x - radius) / GRID_SIZE));
+        const maxCol = Math.min(this.cols - 1, Math.floor((center.x + radius) / GRID_SIZE));
+        const minRow = Math.max(0, Math.floor((center.y - radius) / GRID_SIZE));
+        const maxRow = Math.min(this.rows - 1, Math.floor((center.y + radius) / GRID_SIZE));
+
+        for (let row = minRow; row <= maxRow; row++) {
+            for (let col = minCol; col <= maxCol; col++) {
+                const cx = (col + 0.5) * GRID_SIZE - center.x;
+                const cy = (row + 0.5) * GRID_SIZE - center.y;
+                if (cx * cx + cy * cy <= radius * radius) {
+                    this.grid[row][col] = owner;
                 }
             }
         }
     }
 
     private draw(): void {
-        // 背景クリア
-        this.ctx.fillStyle = '#e0e0e0';
-        this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-        // グリッド描画
-        for (let row = 0; row < ROWS; row++) {
-            for (let col = 0; col < COLS; col++) {
-                const owner = this.grid[row][col];
-                if (owner === CellOwner.PLAYER) {
-                    this.ctx.fillStyle = 'rgba(59, 130, 246, 0.5)';
-                    this.ctx.fillRect(col * GRID_SIZE, row * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-                } else if (owner === CellOwner.CPU) {
-                    this.ctx.fillStyle = 'rgba(239, 68, 68, 0.5)';
-                    this.ctx.fillRect(col * GRID_SIZE, row * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-                }
-            }
-        }
+        const ctx = this.ctx;
+        ctx.drawImage(this.ground, 0, 0, this.width, this.height);
+        this.drawPaint();
 
         // アイテム描画
         this.drawItems();
-
-        // プレイヤー描画
-        this.drawPlayer(this.player);
-        this.drawPlayer(this.cpu);
 
         // 必殺技発動中のエフェクト
         if (this.specialActive) {
             this.drawSpecialEffect();
         }
+
+        const fighters = [this.player, this.cpu].sort((a, b) => a.y - b.y);
+        for (const fighter of fighters) {
+            this.drawShadow(fighter);
+        }
+        for (const fighter of fighters) {
+            this.drawFighter(fighter);
+        }
     }
 
-    private drawPlayer(player: Player): void {
-        const centerX = player.x + PLAYER_SIZE / 2;
-        const centerY = player.y + PLAYER_SIZE / 2;
-        const scale = PLAYER_SIZE * 1.5; // 人型のサイズを大きく
+    // 平らな塗りでは色紙のように見えるため、塗り跡の輪郭に影とハイライトを付けてペンキの厚みを出す
+    private drawPaint(): void {
+        const ctx = this.ctx;
+        const fx = this.fxCtx;
+        const w = this.fxLayer.width;
+        const h = this.fxLayer.height;
+        const offset = Math.max(1, Math.round(2 * this.scale));
 
-        this.ctx.strokeStyle = player.color;
-        this.ctx.fillStyle = player.color;
-        this.ctx.lineWidth = 3;
-        this.ctx.lineCap = 'round';
-        this.ctx.lineJoin = 'round';
+        const silhouette = (fill: string, cutX: number, cutY: number) => {
+            fx.globalCompositeOperation = 'source-over';
+            fx.clearRect(0, 0, w, h);
+            fx.drawImage(this.paintLayer, 0, 0);
+            fx.globalCompositeOperation = 'source-in';
+            fx.fillStyle = fill;
+            fx.fillRect(0, 0, w, h);
+            if (cutX || cutY) {
+                fx.globalCompositeOperation = 'destination-out';
+                fx.drawImage(this.paintLayer, cutX, cutY);
+            }
+        };
 
-        // 頭
-        this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY - scale * 3, scale * 1.2, 0, Math.PI * 2);
-        this.ctx.fill();
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-        // 白い縁取り（頭）
-        this.ctx.strokeStyle = 'white';
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
+        silhouette('rgba(0, 0, 0, 0.22)', 0, 0);
+        ctx.drawImage(this.fxLayer, offset, offset * 1.5);
 
-        // 体の線に戻す
-        this.ctx.strokeStyle = player.color;
-        this.ctx.lineWidth = 3;
+        ctx.drawImage(this.paintLayer, 0, 0);
 
-        // 体
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY - scale * 1.5);
-        this.ctx.lineTo(centerX, centerY + scale * 1);
-        this.ctx.stroke();
+        silhouette('rgba(0, 0, 0, 0.22)', -offset, -offset);
+        ctx.drawImage(this.fxLayer, 0, 0);
 
-        // 腕（左）
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY - scale * 1);
-        this.ctx.lineTo(centerX - scale * 1.5, centerY);
-        this.ctx.stroke();
+        silhouette('rgba(255, 255, 255, 0.55)', offset, offset);
+        ctx.drawImage(this.fxLayer, 0, 0);
 
-        // 腕（右）
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY - scale * 1);
-        this.ctx.lineTo(centerX + scale * 1.5, centerY);
-        this.ctx.stroke();
+        ctx.restore();
+    }
 
-        // 脚（左）
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY + scale * 1);
-        this.ctx.lineTo(centerX - scale * 1, centerY + scale * 3);
-        this.ctx.stroke();
+    private drawShadow(fighter: Fighter): void {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath();
+        ctx.ellipse(fighter.x, fighter.y, 19, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
 
-        // 脚（右）
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY + scale * 1);
-        this.ctx.lineTo(centerX + scale * 1, centerY + scale * 3);
-        this.ctx.stroke();
+    private drawFighter(fighter: Fighter): void {
+        const ctx = this.ctx;
+        const run = fighter.runBlend;
+        const phase = fighter.runPhase;
+        const breathe = Math.sin(Date.now() / 300) * (1 - run);
+        const unit = FIGURE_HEIGHT / 58;
 
-        // 白い縁取り（全体）
-        this.ctx.strokeStyle = 'white';
-        this.ctx.lineWidth = 1;
+        const thigh = 13 * unit;
+        const shin = 13 * unit;
+        const torso = 18 * unit;
+        const upperArm = 10 * unit;
+        const forearm = 10 * unit;
+        const headRadius = 7.5 * unit;
 
-        // 体の縁取り
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY - scale * 1.5);
-        this.ctx.lineTo(centerX, centerY + scale * 1);
-        this.ctx.stroke();
+        const angledFromDown = (from: Position, angle: number, length: number): Position => ({
+            x: from.x + Math.sin(angle) * length * fighter.facing,
+            y: from.y + Math.cos(angle) * length
+        });
 
-        // 腕の縁取り
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY - scale * 1);
-        this.ctx.lineTo(centerX - scale * 1.5, centerY);
-        this.ctx.moveTo(centerX, centerY - scale * 1);
-        this.ctx.lineTo(centerX + scale * 1.5, centerY);
-        this.ctx.stroke();
+        const bob = Math.abs(Math.cos(phase)) * 3 * unit * run;
+        const hip = { x: fighter.x, y: fighter.y - (thigh + shin) * (1 - 0.12 * run) - bob + breathe };
+        const lean = 0.32 * run;
+        const neck = angledFromDown(hip, Math.PI - lean, torso);
+        const head = angledFromDown(neck, Math.PI - lean * 1.2, headRadius + 2 * unit);
+        const shoulder = angledFromDown(hip, Math.PI - lean, torso * 0.92);
 
-        // 脚の縁取り
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, centerY + scale * 1);
-        this.ctx.lineTo(centerX - scale * 1, centerY + scale * 3);
-        this.ctx.moveTo(centerX, centerY + scale * 1);
-        this.ctx.lineTo(centerX + scale * 1, centerY + scale * 3);
-        this.ctx.stroke();
+        const leg = (offset: number): Position[] => {
+            const swing = phase + offset;
+            const thighAngle = Math.sin(swing) * 0.85 * run;
+            const kneeBend = (0.15 + Math.max(0, Math.cos(swing)) * 1.5) * run + 0.05;
+            const knee = angledFromDown(hip, thighAngle, thigh);
+            const foot = angledFromDown(knee, thighAngle - kneeBend, shin);
+            return [hip, knee, foot];
+        };
+
+        const arm = (offset: number): Position[] => {
+            const swing = phase + offset;
+            const upperAngle = -Math.sin(swing) * 0.95 * run + 0.1;
+            const elbow = angledFromDown(shoulder, upperAngle, upperArm);
+            const hand = angledFromDown(elbow, upperAngle + 0.3 + 1.3 * run, forearm);
+            return [shoulder, elbow, hand];
+        };
+
+        const outline = '#111827';
+        const near = fighter.color;
+        const far = hsl(fighter.paint, -18);
+
+        const limb = (points: Position[], color: string, width: number) => {
+            ctx.strokeStyle = outline;
+            ctx.lineWidth = width + 3.5;
+            ctx.beginPath();
+            points.forEach((pt, i) => (i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
+            ctx.stroke();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.stroke();
+        };
+
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        limb(arm(0), far, 4 * unit);
+        limb(leg(Math.PI), far, 5 * unit);
+
+        this.drawScarf(fighter, neck, run);
+        limb([hip, neck], near, 6.5 * unit);
+
+        limb(leg(0), near, 5 * unit);
+
+        ctx.fillStyle = near;
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.moveTo(head.x + headRadius * 0.15 * fighter.facing, head.y - headRadius * 0.35);
+        ctx.lineTo(head.x + headRadius * 0.95 * fighter.facing, head.y - headRadius * 0.15);
+        ctx.lineTo(head.x + headRadius * 0.85 * fighter.facing, head.y + headRadius * 0.2);
+        ctx.lineTo(head.x + headRadius * 0.1 * fighter.facing, head.y + headRadius * 0.05);
+        ctx.closePath();
+        ctx.fill();
+
+        limb(arm(Math.PI), near, 4 * unit);
+
+        ctx.restore();
+    }
+
+    private drawScarf(fighter: Fighter, neck: Position, run: number): void {
+        const ctx = this.ctx;
+        const t = Date.now() / 90;
+        const unit = FIGURE_HEIGHT / 58;
+        const length = (16 + 10 * run) * unit;
+        const points: Position[] = [];
+        for (let i = 0; i <= 4; i++) {
+            const k = i / 4;
+            points.push({
+                x: neck.x - fighter.facing * length * k,
+                y: neck.y + (2 + k * (6 - 5 * run) + Math.sin(t - i * 1.2) * 3 * k) * unit
+            });
+        }
+
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 7 * unit;
+        ctx.beginPath();
+        points.forEach((pt, i) => (i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
+        ctx.stroke();
+        ctx.strokeStyle = hsl(fighter.paint, 22);
+        ctx.lineWidth = 4 * unit;
+        ctx.stroke();
     }
 
     private updateScores(): void {
@@ -539,8 +783,8 @@ class Game {
         let cpuCells = 0;
         let totalCells = 0;
 
-        for (let row = 0; row < ROWS; row++) {
-            for (let col = 0; col < COLS; col++) {
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
                 const owner = this.grid[row][col];
                 if (owner === CellOwner.PLAYER) playerCells++;
                 else if (owner === CellOwner.CPU) cpuCells++;
@@ -580,8 +824,8 @@ class Game {
         let playerCells = 0;
         let cpuCells = 0;
 
-        for (let row = 0; row < ROWS; row++) {
-            for (let col = 0; col < COLS; col++) {
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
                 const owner = this.grid[row][col];
                 if (owner === CellOwner.PLAYER) playerCells++;
                 else if (owner === CellOwner.CPU) cpuCells++;
@@ -621,8 +865,8 @@ class Game {
     private spawnItem(): void {
         // ランダムな位置にアイテムを生成
         const item: Item = {
-            x: Math.random() * (CANVAS_WIDTH - ITEM_SIZE),
-            y: Math.random() * (CANVAS_HEIGHT - ITEM_SIZE),
+            x: Math.random() * (this.width - ITEM_SIZE),
+            y: Math.random() * (this.height - ITEM_SIZE),
             active: true
         };
         this.items.push(item);
@@ -634,12 +878,12 @@ class Game {
             if (!item.active) continue;
 
             // プレイヤーとの距離を計算
-            const dx = (this.player.x + PLAYER_SIZE / 2) - (item.x + ITEM_SIZE / 2);
-            const dy = (this.player.y + PLAYER_SIZE / 2) - (item.y + ITEM_SIZE / 2);
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            const dx = this.player.x - (item.x + ITEM_SIZE / 2);
+            const dy = this.player.y - (item.y + ITEM_SIZE / 2);
+            const distance = Math.hypot(dx, dy);
 
             // 衝突判定
-            if (distance < PLAYER_SIZE + ITEM_SIZE / 2) {
+            if (distance < GRID_SIZE + ITEM_SIZE) {
                 item.active = false;
                 this.items.splice(i, 1);
 
@@ -655,6 +899,7 @@ class Game {
             this.specialActive = true;
             this.specialEndTime = Date.now() + SPECIAL_DURATION;
             this.specialGauge = 0;
+            this.burstSplat(this.player, { x: this.player.x, y: this.player.y }, SPECIAL_BRUSH_RADIUS * 1.6, 14);
             this.updateSpecialGaugeUI();
         }
     }
@@ -716,20 +961,15 @@ class Game {
     private drawSpecialEffect(): void {
         // プレイヤーの周りに光るエフェクト
         const time = Date.now() / 200;
-        const radius = PLAYER_SIZE * 2 + Math.sin(time) * 5;
+        const radius = SPECIAL_BRUSH_RADIUS + Math.sin(time) * 5;
 
         this.ctx.save();
-        this.ctx.globalAlpha = 0.3;
-        this.ctx.fillStyle = '#fbbf24';
+        this.ctx.globalAlpha = 0.35;
+        this.ctx.strokeStyle = '#fbbf24';
+        this.ctx.lineWidth = 6;
         this.ctx.beginPath();
-        this.ctx.arc(
-            this.player.x + PLAYER_SIZE / 2,
-            this.player.y + PLAYER_SIZE / 2,
-            radius,
-            0,
-            Math.PI * 2
-        );
-        this.ctx.fill();
+        this.ctx.ellipse(this.player.x, this.player.y, radius, radius * 0.45, 0, 0, Math.PI * 2);
+        this.ctx.stroke();
         this.ctx.restore();
     }
 }

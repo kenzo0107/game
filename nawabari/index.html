@@ -33,12 +33,12 @@
             height: 100dvh;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            grid-template-rows: auto minmax(0, 1fr) minmax(170px, 34dvh);
+            grid-template-rows: auto minmax(0, 1fr) minmax(140px, 24dvh);
             grid-template-areas:
                 "hud hud"
                 "field field"
-                "stick special";
-            gap: 8px;
+                "special stick";
+            gap: 6px;
             padding:
                 max(8px, env(safe-area-inset-top))
                 max(8px, env(safe-area-inset-right))
@@ -48,11 +48,11 @@
 
         @media (orientation: landscape) and (max-height: 600px) {
             .app {
-                grid-template-columns: minmax(120px, 1fr) 3fr minmax(120px, 1fr);
+                grid-template-columns: minmax(110px, 1fr) 4fr minmax(110px, 1fr);
                 grid-template-rows: auto minmax(0, 1fr);
                 grid-template-areas:
                     "hud hud hud"
-                    "stick field special";
+                    "special field stick";
             }
         }
 
@@ -120,8 +120,9 @@
 
         .board {
             position: relative;
-            width: min(100cqw, 100cqh * 4 / 3);
-            aspect-ratio: 4 / 3;
+            --aspect: 1.3333;
+            width: min(100cqw, 100cqh * var(--aspect));
+            aspect-ratio: var(--aspect);
         }
 
         canvas {
@@ -307,8 +308,8 @@
                 <div class="overlay show" id="startOverlay">
                     <h1>ナワバリバトル</h1>
                     <p>
-                        左の操作エリアをドラッグして移動。<br>
-                        ⭐を2つ取って SP ボタンで必殺技！<br>
+                        右の操作エリアをドラッグして移動。<br>
+                        ⭐を2つ取って左の SP ボタンで必殺技！<br>
                         60秒で CPU より多く塗ろう
                     </p>
                     <p class="key-hint">キーボード: WASD / 矢印キーで移動、スペースで必殺技</p>
