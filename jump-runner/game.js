@@ -1,8 +1,43 @@
 // キャンバス設定
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = 850;
-canvas.height = 400;
+
+const WORLD_HEIGHT = 400;
+const GROUND_Y = 360;
+// 縦持ちでもキャラが小さくなりすぎないよう、横方向に見える範囲はこの幅まで狭める
+const MIN_VIEW_WIDTH = 640;
+// 縦持ちで余る縦方向の領域のうち、地面より下に回す割合
+const BELOW_GROUND_RATIO = 0.3;
+
+// 画面全体を使うため、ゲーム内座標（高さ 400）を画面サイズに合わせて拡大し、余った領域に空と地面を広げる
+const view = { width: 850, top: 0, bottom: WORLD_HEIGHT, scale: 1, cssWidth: 0, cssHeight: 0, dpr: 1 };
+
+function resizeCanvas() {
+    const cssWidth = window.innerWidth;
+    const cssHeight = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+
+    const scale = Math.min(cssHeight / WORLD_HEIGHT, cssWidth / MIN_VIEW_WIDTH);
+    const extra = cssHeight / scale - WORLD_HEIGHT;
+    Object.assign(view, {
+        width: cssWidth / scale,
+        top: -extra * (1 - BELOW_GROUND_RATIO),
+        bottom: WORLD_HEIGHT + extra * BELOW_GROUND_RATIO,
+        scale,
+        cssWidth,
+        cssHeight,
+        dpr,
+    });
+}
+
+function applyWorldTransform() {
+    const k = view.scale * view.dpr;
+    ctx.setTransform(k, 0, 0, k, 0, -view.top * k);
+}
+
+resizeCanvas();
 
 // ゲーム状態
 let gameState = 'ready'; // ready, playing, gameover
@@ -260,7 +295,7 @@ class Player {
 class Obstacle {
     constructor(type) {
         this.type = type; // 'hole', 'block', 'slope_up', 'slope_down', 'step'
-        this.x = canvas.width;
+        this.x = view.width;
 
         if (type === 'hole') {
             this.width = 80;
@@ -383,7 +418,7 @@ class Obstacle {
 class Enemy {
     constructor(type) {
         this.type = type; // 'walker', 'flyer', 'shooter'
-        this.x = canvas.width;
+        this.x = view.width;
         this.width = 30;
         this.height = 30;
         this.alive = true;
@@ -641,7 +676,7 @@ class Bullet {
     }
 
     isOffScreen() {
-        return this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height;
+        return this.x < 0 || this.x > view.width || this.y < view.top || this.y > view.bottom;
     }
 }
 
@@ -713,7 +748,7 @@ class Bomb {
     }
 
     isOffScreen() {
-        return this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50;
+        return this.x < -50 || this.x > view.width + 50 || this.y < view.top - 50 || this.y > view.bottom + 50;
     }
 }
 
@@ -721,7 +756,8 @@ class Bomb {
 class Boss {
     constructor(level) {
         this.level = level;
-        this.x = canvas.width / 2 - 40;
+        // 狭い画面ではボスの左右移動がプレイヤー位置(x=100)まで届かないよう、中心を右に寄せる
+        this.x = Math.max(view.width / 2, 380) - 40;
         this.y = 280;
         this.width = 80;
         this.height = 80;
@@ -1037,7 +1073,7 @@ class Boss {
 class Item {
     constructor(type) {
         this.type = type; // 'wing', 'shield', 'star'
-        this.x = canvas.width;
+        this.x = view.width;
         this.width = 30;
         this.height = 30;
         this.y = 250; // 空中に浮かぶ
@@ -1170,7 +1206,7 @@ class Item {
 
 // 背景要素クラス
 class Cloud {
-    constructor(x = canvas.width) {
+    constructor(x = view.width) {
         this.x = x;
         this.y = 50 + Math.random() * 100; // 50-150の高さにランダム配置
         this.width = 60 + Math.random() * 40; // 60-100のランダムな幅
@@ -1198,7 +1234,7 @@ class Cloud {
 }
 
 class Mountain {
-    constructor(x = canvas.width) {
+    constructor(x = view.width) {
         this.x = x;
         this.width = 150 + Math.random() * 100; // 150-250のランダムな幅
         this.height = 120 + Math.random() * 80; // 120-200のランダムな高さ
@@ -1237,7 +1273,7 @@ class Mountain {
 }
 
 class Tree {
-    constructor(x = canvas.width) {
+    constructor(x = view.width) {
         this.x = x;
         this.y = 310; // 地面の少し上
         this.width = 40;
@@ -1297,7 +1333,7 @@ let nextBossScore = 3000; // 次にボスが出現するスコア
 
 // 地面の模様クラス（スピード感を出すため）
 class GroundLine {
-    constructor(x = canvas.width) {
+    constructor(x = view.width) {
         this.x = x;
         this.y = 365 + Math.random() * 30; // 地面の上にランダムに配置
         this.width = 20 + Math.random() * 30;
@@ -1718,41 +1754,11 @@ function init() {
 }
 
 // UI更新
+const scoreElement = document.getElementById('score');
+
 function updateUI() {
-    document.getElementById('score').textContent = score;
-    document.getElementById('highScore').textContent = highScore;
-
-    // 二段ジャンプの状態表示
-    const doubleJumpStatus = document.getElementById('doubleJumpStatus');
-    const doubleJumpGauge = document.getElementById('doubleJumpGauge');
-    if (player && player.hasDoubleJump) {
-        doubleJumpStatus.style.display = 'block';
-        // ゲージの幅を更新（最大1800フレーム）
-        const percentage = (player.doubleJumpTimer / 1800) * 100;
-        doubleJumpGauge.style.width = percentage + '%';
-    } else {
-        doubleJumpStatus.style.display = 'none';
-    }
-
-    // シールドの状態表示
-    const shieldStatus = document.getElementById('shieldStatus');
-    if (player && player.hasShield) {
-        shieldStatus.style.display = 'block';
-    } else {
-        shieldStatus.style.display = 'none';
-    }
-
-    // スターパワーの状態表示
-    const starStatus = document.getElementById('starStatus');
-    const starGauge = document.getElementById('starGauge');
-    if (player && player.hasStarPower) {
-        starStatus.style.display = 'block';
-        // ゲージの幅を更新（最大600フレーム）
-        const percentage = (player.starPowerTimer / 600) * 100;
-        starGauge.style.width = percentage + '%';
-    } else {
-        starStatus.style.display = 'none';
-    }
+    scoreElement.textContent = score;
+    scoreElement.hidden = gameState !== 'playing';
 }
 
 // 衝突判定
@@ -1780,16 +1786,28 @@ function checkStomp(player, enemy) {
 }
 
 
+function drawSky() {
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(0, view.top, view.width, view.bottom - view.top);
+}
+
+function drawGround() {
+    ctx.fillStyle = '#90EE90';
+    ctx.fillRect(0, GROUND_Y, view.width, WORLD_HEIGHT - GROUND_Y);
+    ctx.fillStyle = '#8B5A2B';
+    ctx.fillRect(0, WORLD_HEIGHT, view.width, view.bottom - WORLD_HEIGHT);
+}
+
 // ゲームループ
 function gameLoop() {
     if (gameState !== 'playing') {
-        drawOverlay('GAME OVER', '画面をタップしてリスタート');
+        drawGameOver();
         return;
     }
 
-    // 背景クリア（空の色）
-    ctx.fillStyle = '#87CEEB'; // 空色
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    applyWorldTransform();
+
+    drawSky();
 
     // 背景要素の生成
     backgroundTimer++;
@@ -1844,8 +1862,7 @@ function gameLoop() {
     }
 
     // 地面描画
-    ctx.fillStyle = '#90EE90';
-    ctx.fillRect(0, 360, canvas.width, 40);
+    drawGround();
 
     // 地面の模様を描画（スピード感を出すため）
     for (let i = groundLines.length - 1; i >= 0; i--) {
@@ -2220,21 +2237,56 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-function drawOverlay(title, message) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'white';
+function drawOverlay(lines) {
+    scoreElement.hidden = true;
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+
+    const unit = Math.min(view.cssWidth / 14, view.cssHeight / 9, 56);
+    const totalHeight = lines.reduce((sum, line) => sum + unit * line.size * 1.5, 0);
+    let y = (view.cssHeight - totalHeight) / 2;
     ctx.textAlign = 'center';
-    ctx.font = 'bold 48px sans-serif';
-    ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 20);
-    ctx.font = 'bold 24px sans-serif';
-    ctx.fillText(message, canvas.width / 2, canvas.height / 2 + 30);
+    ctx.textBaseline = 'top';
+    for (const line of lines) {
+        ctx.font = `bold ${unit * line.size}px sans-serif`;
+        ctx.fillStyle = line.color || 'white';
+        ctx.fillText(line.text, view.cssWidth / 2, y);
+        y += unit * line.size * 1.5;
+    }
     ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+}
+
+function drawGameOver() {
+    const isNewRecord = score > 0 && score >= highScore;
+    drawOverlay([
+        { text: 'GAME OVER', size: 1.1 },
+        { text: `スコア ${score}`, size: 0.7 },
+        { text: isNewRecord ? `🎉 ハイスコア更新！ ${highScore}` : `ハイスコア ${highScore}`, size: 0.55, color: '#FFD700' },
+        { text: 'タップしてリスタート', size: 0.45 },
+    ]);
+}
+
+function drawBackdrop() {
+    applyWorldTransform();
+    drawSky();
+    drawGround();
+    player.draw();
+}
+
+function drawTitle() {
+    drawBackdrop();
+    drawOverlay([
+        { text: 'ジャンプランナー', size: 1 },
+        { text: 'タップしてスタート', size: 0.5 },
+    ]);
 }
 
 function startGame() {
     init();
     gameState = 'playing';
+    updateUI();
 
     initAudio();
     playStartSound();
@@ -2273,5 +2325,16 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// ゲームオーバー画面はリサイズでキャンバスが消えても直前の場面を再現できないため、空と地面だけで描き直す
+window.addEventListener('resize', () => {
+    resizeCanvas();
+    if (gameState === 'ready') {
+        drawTitle();
+    } else if (gameState === 'gameover') {
+        drawBackdrop();
+        drawGameOver();
+    }
+});
+
 init();
-drawOverlay('ジャンプランナー', '画面をタップしてスタート');
+drawTitle();
