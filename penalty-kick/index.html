@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b3d1f">
     <title>サッカー PKゲーム</title>
     <style>
         * {
@@ -11,462 +12,769 @@
             box-sizing: border-box;
         }
 
+        html,
         body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif;
+            background: #0b3d1f;
+            color: white;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #field {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100dvh;
+            display: block;
+        }
+
+        .hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
             display: flex;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
-            padding: 20px;
-        }
-
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-        }
-
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 30px;
-            font-size: 2.5em;
+            gap: 12px;
+            padding:
+                max(10px, env(safe-area-inset-top))
+                max(14px, env(safe-area-inset-right))
+                10px
+                max(14px, env(safe-area-inset-left));
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
         }
 
         .score {
+            font-size: 1.2rem;
+        }
+
+        .kicks {
             display: flex;
-            justify-content: space-around;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f0f0f0;
-            border-radius: 10px;
+            gap: 6px;
         }
 
-        .score-item {
-            text-align: center;
+        .kicks span {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.85);
         }
 
-        .score-label {
-            font-size: 0.9em;
-            color: #666;
-            margin-bottom: 5px;
+        .kicks span.goal {
+            background: #22c55e;
+            border-color: #22c55e;
         }
 
-        .score-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #667eea;
+        .kicks span.save {
+            background: #ef4444;
+            border-color: #ef4444;
         }
 
-        .goal-area {
-            margin: 30px 0;
-            padding: 40px 20px;
-            background: linear-gradient(to bottom, #87CEEB 0%, #98D98E 100%);
-            border-radius: 15px;
-            position: relative;
-            min-height: 200px;
-        }
-
-        .goal-posts {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            height: 150px;
-        }
-
-        .post {
-            width: 8px;
-            height: 150px;
-            background: white;
-            border: 2px solid #333;
-        }
-
-        .crossbar {
-            position: absolute;
-            top: 40px;
+        .hint {
+            position: fixed;
             left: 0;
             right: 0;
-            height: 8px;
-            background: white;
-            border: 2px solid #333;
-        }
-
-        .keeper {
-            position: absolute;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 3em;
-            transition: all 0.3s ease;
-        }
-
-        .keeper.dive-left {
-            left: 20%;
-        }
-
-        .keeper.dive-right {
-            left: 80%;
-        }
-
-        .ball {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 2em;
-            transition: all 0.5s ease;
-        }
-
-        .ball.shoot-left {
-            left: 20%;
-            bottom: 80px;
-        }
-
-        .ball.shoot-center {
-            bottom: 80px;
-        }
-
-        .ball.shoot-right {
-            left: 80%;
-            bottom: 80px;
-        }
-
-        .direction-buttons {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .direction-btn {
-            flex: 1;
-            padding: 15px;
-            font-size: 1.1em;
-            border: 3px solid #667eea;
-            background: white;
-            color: #667eea;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: bold;
-        }
-
-        .direction-btn:hover {
-            background: #667eea;
-            color: white;
-            transform: translateY(-2px);
-        }
-
-        .direction-btn.selected {
-            background: #667eea;
-            color: white;
-        }
-
-        .kick-btn {
-            width: 100%;
-            padding: 20px;
-            font-size: 1.3em;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-
-        .kick-btn:hover:not(:disabled) {
-            background: #218838;
-            transform: translateY(-2px);
-        }
-
-        .kick-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-
-        .result {
+            bottom: max(16px, env(safe-area-inset-bottom));
             text-align: center;
-            font-size: 1.5em;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
             font-weight: bold;
-            min-height: 60px;
-            display: flex;
-            align-items: center;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .hint.hidden {
+            opacity: 0;
+        }
+
+        .banner {
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 42%;
+            text-align: center;
+            font-size: clamp(2.4rem, 12vw, 5rem);
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            -webkit-text-stroke: 2px rgba(0, 0, 0, 0.35);
+            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            opacity: 0;
+            transform: scale(0.6);
+            transition: opacity 0.2s, transform 0.25s cubic-bezier(0.2, 1.6, 0.4, 1);
+        }
+
+        .banner.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .banner.goal {
+            color: #facc15;
+        }
+
+        .banner.save {
+            color: #f87171;
+        }
+
+        .banner small {
+            display: block;
+            font-size: 0.35em;
+            -webkit-text-stroke: 0;
+            color: white;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            display: none;
+            flex-direction: column;
             justify-content: center;
-        }
-
-        .result.goal {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .result.save {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .result.win {
-            background: #d4edda;
-            color: #155724;
-            font-size: 2em;
-        }
-
-        .result.lose {
-            background: #f8d7da;
-            color: #721c24;
-            font-size: 2em;
-        }
-
-        .game-over {
+            align-items: center;
+            gap: 16px;
+            padding: 24px;
             text-align: center;
-            padding: 30px;
-            background: #fff3cd;
-            border-radius: 10px;
-            margin: 20px 0;
-            border: 3px solid #ffc107;
+            background: rgba(0, 0, 0, 0.6);
         }
 
-        .game-over h2 {
-            margin-bottom: 15px;
-            color: #856404;
+        .overlay.show {
+            display: flex;
         }
 
-        .new-game-btn {
-            width: 100%;
-            padding: 20px;
-            font-size: 1.3em;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
+        .overlay h2 {
+            font-size: clamp(2rem, 9vw, 3.5rem);
+        }
+
+        .overlay p {
+            font-size: 1.2rem;
+        }
+
+        .overlay button {
+            margin-top: 8px;
+            padding: 16px 48px;
+            font: inherit;
+            font-size: 1.2rem;
             font-weight: bold;
-            margin-top: 20px;
-        }
-
-        .new-game-btn:hover {
-            background: #0056b3;
-            transform: translateY(-2px);
-        }
-
-        .reset-btn {
-            width: 100%;
-            padding: 15px;
-            font-size: 1em;
-            background: #6c757d;
             color: white;
+            background: #2563eb;
             border: none;
-            border-radius: 10px;
+            border-radius: 999px;
+            box-shadow: 0 6px 0 #1e3a8a;
             cursor: pointer;
-            transition: all 0.3s;
-            font-weight: bold;
-            margin-top: 10px;
         }
 
-        .reset-btn:hover {
-            background: #5a6268;
+        .overlay button:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #1e3a8a;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>⚽ PKゲーム</h1>
+    <canvas id="field"></canvas>
 
-        <div class="score">
-            <div class="score-item">
-                <div class="score-label">ゴール</div>
-                <div class="score-value" id="goals">0</div>
-            </div>
-            <div class="score-item">
-                <div class="score-label">セーブ</div>
-                <div class="score-value" id="saves">0</div>
-            </div>
-            <div class="score-item">
-                <div class="score-label">残り回数</div>
-                <div class="score-value" id="remaining">5</div>
-            </div>
-        </div>
+    <div class="hud">
+        <div class="score">⚽ <span id="goals">0</span> ゴール</div>
+        <div class="kicks" id="kicks"></div>
+    </div>
 
-        <div class="goal-area">
-            <div class="crossbar"></div>
-            <div class="goal-posts">
-                <div class="post"></div>
-                <div class="post"></div>
-            </div>
-            <div class="keeper" id="keeper">🧍</div>
-            <div class="ball" id="ball">⚽</div>
-        </div>
+    <div class="hint" id="hint">ねらうコースへ向けてスワイプ！<br>左右はスワイプの向き・上下は上へ払う長さ</div>
+    <div class="banner" id="banner"></div>
 
-        <div class="direction-buttons">
-            <button class="direction-btn" data-direction="left">← 左</button>
-            <button class="direction-btn" data-direction="center">真ん中</button>
-            <button class="direction-btn" data-direction="right">右 →</button>
-        </div>
-
-        <button class="kick-btn" id="kickBtn" disabled>キック！</button>
-
-        <div class="result" id="result"></div>
-
-        <button class="reset-btn" id="resetBtn">新しいゲーム</button>
+    <div class="overlay" id="gameOver">
+        <h2 id="finalTitle"></h2>
+        <p id="finalText"></p>
+        <button type="button" id="restartBtn">もう一度</button>
     </div>
 
     <script>
         const MAX_ATTEMPTS = 5;
         const WIN_THRESHOLD = 3;
 
-        let selectedDirection = null;
-        let goals = 0;
-        let saves = 0;
-        let attempts = 0;
-        let gameOver = false;
+        const RUNUP_SEC = 0.35;
+        const CONTACT_SEC = 0.45;
+        const FLIGHT_SEC = 0.55;
+        const KEEPER_DELAY_SEC = 0.05;
+        const KEEPER_DIVE_SEC = 0.45;
+        const AFTER_SEC = 1.4;
 
-        const directionButtons = document.querySelectorAll('.direction-btn');
-        const kickBtn = document.getElementById('kickBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const resultDiv = document.getElementById('result');
-        const keeper = document.getElementById('keeper');
-        const ball = document.getElementById('ball');
+        const KEEPER_REACH_X = 0.4;
+        const KEEPER_REACH_Y = 0.3;
+        const KEEPER_TARGETS = [-0.66, 0, 0.66].flatMap(x => [0.25, 0.75].map(y => ({ x, y })));
 
-        // 方向選択
-        directionButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (gameOver) return;
+        const canvas = document.getElementById('field');
+        const ctx = canvas.getContext('2d');
+        const goalsEl = document.getElementById('goals');
+        const kicksEl = document.getElementById('kicks');
+        const hintEl = document.getElementById('hint');
+        const bannerEl = document.getElementById('banner');
+        const gameOverEl = document.getElementById('gameOver');
 
-                directionButtons.forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                selectedDirection = btn.dataset.direction;
-                kickBtn.disabled = false;
-            });
-        });
+        const view = { w: 0, h: 0, goalL: 0, goalW: 0, goalH: 0, groundY: 0, ballX: 0, ballY: 0, ballR: 0 };
 
-        // キック実行
-        kickBtn.addEventListener('click', () => {
-            if (!selectedDirection || gameOver) return;
+        let results = [];
+        let phase = 'ready';
+        let swipe = null;
+        let aim = null;
+        let shot = null;
+        let lastTime = 0;
 
-            kickBtn.disabled = true;
-            directionButtons.forEach(btn => btn.disabled = true);
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            view.w = window.innerWidth;
+            view.h = window.innerHeight;
+            canvas.width = Math.round(view.w * dpr);
+            canvas.height = Math.round(view.h * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-            // キーパーがランダムに飛ぶ
-            const directions = ['left', 'center', 'right'];
-            const keeperDirection = directions[Math.floor(Math.random() * directions.length)];
-
-            // アニメーション
-            keeper.classList.remove('dive-left', 'dive-right');
-            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
-
-            setTimeout(() => {
-                // キーパーの動き
-                if (keeperDirection === 'left') {
-                    keeper.classList.add('dive-left');
-                } else if (keeperDirection === 'right') {
-                    keeper.classList.add('dive-right');
-                }
-
-                // ボールの動き
-                ball.classList.add('shoot-' + selectedDirection);
-
-                // 結果判定
-                attempts++;
-                let isGoal = selectedDirection !== keeperDirection;
-
-                setTimeout(() => {
-                    if (isGoal) {
-                        goals++;
-                        resultDiv.textContent = '🎉 ゴール！';
-                        resultDiv.className = 'result goal';
-                    } else {
-                        saves++;
-                        resultDiv.textContent = '😭 セーブされた！';
-                        resultDiv.className = 'result save';
-                    }
-
-                    updateScore();
-
-                    // ゲーム終了判定
-                    if (attempts >= MAX_ATTEMPTS) {
-                        setTimeout(() => {
-                            endGame();
-                        }, 1500);
-                    } else {
-                        // 次のキックへ
-                        setTimeout(() => {
-                            resetKick();
-                        }, 2000);
-                    }
-                }, 500);
-            }, 100);
-        });
-
-        // キックのリセット（ゲーム継続）
-        function resetKick() {
-            keeper.classList.remove('dive-left', 'dive-right');
-            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
-            directionButtons.forEach(btn => {
-                btn.disabled = false;
-                btn.classList.remove('selected');
-            });
-            selectedDirection = null;
-            kickBtn.disabled = true;
-            resultDiv.textContent = '';
-            resultDiv.className = 'result';
+            view.goalW = Math.min(view.w * 0.9, view.h * 0.8);
+            view.goalH = view.goalW * 0.36;
+            view.goalL = (view.w - view.goalW) / 2;
+            view.groundY = Math.max(view.h * 0.17, 56) + view.goalH;
+            view.ballX = view.w / 2;
+            view.ballY = view.h * 0.76;
+            view.ballR = Math.max(12, view.goalW * 0.05);
         }
 
-        // ゲーム終了
-        function endGame() {
-            gameOver = true;
-            keeper.classList.remove('dive-left', 'dive-right');
-            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
+        function goalToScreen(gx, gy) {
+            return {
+                x: view.goalL + (gx + 1) / 2 * view.goalW,
+                y: view.groundY - gy * view.goalH,
+            };
+        }
 
-            directionButtons.forEach(btn => btn.disabled = true);
-            kickBtn.disabled = true;
+        function clamp(v, min, max) {
+            return Math.min(max, Math.max(min, v));
+        }
 
-            const isWin = goals >= WIN_THRESHOLD;
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
 
-            if (isWin) {
-                resultDiv.textContent = `🏆 勝利！ ${goals}ゴール成功！`;
-                resultDiv.className = 'result win';
-            } else {
-                resultDiv.textContent = `😢 敗北... ${goals}ゴールでした`;
-                resultDiv.className = 'result lose';
+        function easeOut(t) {
+            return 1 - (1 - t) * (1 - t);
+        }
+
+        // 縦方向も向きだけで決めると「真ん中の上/下」がどちらも真上になり区別できないため、上へ払う長さを使う
+        function aimFromSwipe(dx, dy) {
+            const up = -dy;
+            const minUp = view.h * 0.08;
+            if (up < Math.min(minUp, 40)) return null;
+            const gx = clamp(dx / up / 0.6, -1, 1) * 0.9;
+            const gy = lerp(0.12, 0.88, clamp((up - minUp) / (view.h * 0.22), 0, 1));
+            return { x: gx, y: gy };
+        }
+
+        function zoneLabel(target) {
+            const col = target.x < -0.33 ? '左' : target.x > 0.33 ? '右' : '真ん中';
+            const row = target.y >= 0.5 ? '上' : '下';
+            return col + row;
+        }
+
+        function renderHud() {
+            goalsEl.textContent = results.filter(Boolean).length;
+            kicksEl.innerHTML = '';
+            for (let i = 0; i < MAX_ATTEMPTS; i++) {
+                const dot = document.createElement('span');
+                if (i < results.length) dot.className = results[i] ? 'goal' : 'save';
+                kicksEl.appendChild(dot);
             }
         }
 
-        // 新しいゲーム
-        resetBtn.addEventListener('click', () => {
-            goals = 0;
-            saves = 0;
-            attempts = 0;
-            gameOver = false;
-            selectedDirection = null;
+        function startGame() {
+            results = [];
+            gameOverEl.classList.remove('show');
+            renderHud();
+            resetKick();
+        }
 
-            keeper.classList.remove('dive-left', 'dive-right');
-            ball.classList.remove('shoot-left', 'shoot-center', 'shoot-right');
+        function resetKick() {
+            phase = 'ready';
+            shot = null;
+            aim = null;
+            bannerEl.className = 'banner';
+            hintEl.classList.remove('hidden');
+        }
 
-            directionButtons.forEach(btn => {
-                btn.disabled = false;
-                btn.classList.remove('selected');
+        function kick(target) {
+            const keeper = KEEPER_TARGETS[Math.floor(Math.random() * KEEPER_TARGETS.length)];
+            const saved = Math.abs(target.x - keeper.x) < KEEPER_REACH_X && Math.abs(target.y - keeper.y) < KEEPER_REACH_Y;
+            shot = {
+                time: 0,
+                target,
+                keeper,
+                saved,
+                bounce: { vx: (target.x >= keeper.x ? 1 : -1) * view.goalW * 0.5, vy: -view.goalH * 1.2 },
+                announced: false,
+            };
+            phase = 'kicking';
+            hintEl.classList.add('hidden');
+        }
+
+        function announce() {
+            results.push(!shot.saved);
+            renderHud();
+            bannerEl.innerHTML = (shot.saved ? 'SAVE!' : 'GOAL!') + `<small>${zoneLabel(shot.target)}</small>`;
+            bannerEl.className = 'banner show ' + (shot.saved ? 'save' : 'goal');
+        }
+
+        function finishKick() {
+            if (results.length < MAX_ATTEMPTS) {
+                resetKick();
+                return;
+            }
+            phase = 'over';
+            bannerEl.className = 'banner';
+            const goals = results.filter(Boolean).length;
+            const win = goals >= WIN_THRESHOLD;
+            document.getElementById('finalTitle').textContent = win ? '🏆 勝利！' : '😢 敗北…';
+            document.getElementById('finalText').textContent = `${MAX_ATTEMPTS}本中 ${goals}ゴール`;
+            gameOverEl.classList.add('show');
+        }
+
+        function update(dt) {
+            if (phase !== 'kicking') return;
+            shot.time += dt;
+            const landed = shot.time - CONTACT_SEC - FLIGHT_SEC;
+            if (landed >= 0 && !shot.announced) {
+                shot.announced = true;
+                announce();
+            }
+            if (landed >= AFTER_SEC) finishKick();
+        }
+
+        // ---- 描画 ----
+
+        function drawField() {
+            const { w, h, groundY } = view;
+            const sky = ctx.createLinearGradient(0, 0, 0, groundY);
+            sky.addColorStop(0, '#1e3a5f');
+            sky.addColorStop(1, '#3b6ea5');
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, w, groundY);
+
+            ctx.fillStyle = '#26354d';
+            for (let x = 0; x < w; x += 14) {
+                const y = groundY - view.goalH * 1.25 + Math.sin(x * 0.7) * 4;
+                ctx.fillRect(x, y, 10, groundY - y);
+            }
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.fillRect(0, groundY - view.goalH * 1.3, w, 4);
+
+            const stripes = 8;
+            for (let i = 0; i < stripes; i++) {
+                const y0 = groundY + (h - groundY) * Math.pow(i / stripes, 1.4);
+                const y1 = groundY + (h - groundY) * Math.pow((i + 1) / stripes, 1.4);
+                ctx.fillStyle = i % 2 ? '#2f8f3e' : '#36a047';
+                ctx.fillRect(0, y0, w, y1 - y0 + 1);
+            }
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, groundY);
+            ctx.lineTo(w, groundY);
+            const boxTop = view.goalW * 0.85;
+            const boxBottom = view.goalW * 1.25;
+            const boxY = view.ballY + (h - view.ballY) * 0.55;
+            ctx.moveTo(w / 2 - boxTop, groundY);
+            ctx.lineTo(w / 2 - boxBottom, boxY);
+            ctx.lineTo(w / 2 + boxBottom, boxY);
+            ctx.lineTo(w / 2 + boxTop, groundY);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.beginPath();
+            ctx.ellipse(view.ballX, view.ballY + view.ballR * 0.9, view.ballR * 0.5, view.ballR * 0.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawGoal(netShake) {
+            const { goalL, goalW, goalH, groundY } = view;
+            const top = groundY - goalH;
+            const depth = goalH * 0.22;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.fillRect(goalL, top, goalW, goalH);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+            ctx.lineWidth = 1;
+            const cell = goalH / 9;
+            ctx.beginPath();
+            for (let x = goalL + depth; x <= goalL + goalW - depth + 0.1; x += cell) {
+                const wobble = Math.sin(x * 0.15) * netShake;
+                ctx.moveTo(x + wobble, top + depth * 0.6);
+                ctx.lineTo(x - wobble, groundY);
+            }
+            for (let y = top + depth * 0.6; y <= groundY; y += cell) {
+                const wobble = Math.sin(y * 0.3) * netShake;
+                ctx.moveTo(goalL + depth, y + wobble);
+                ctx.lineTo(goalL + goalW - depth, y - wobble);
+            }
+            ctx.moveTo(goalL, top);
+            ctx.lineTo(goalL + depth, top + depth * 0.6);
+            ctx.moveTo(goalL + goalW, top);
+            ctx.lineTo(goalL + goalW - depth, top + depth * 0.6);
+            ctx.stroke();
+
+            const post = Math.max(4, goalW * 0.014);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(goalL - post, top - post, post, goalH + post);
+            ctx.fillRect(goalL + goalW, top - post, post, goalH + post);
+            ctx.fillRect(goalL - post, top - post, goalW + post * 2, post);
+        }
+
+        function drawAimGuide() {
+            if (!aim) return;
+            const { goalL, goalW, goalH, groundY } = view;
+            const top = groundY - goalH;
+            ctx.save();
+            ctx.setLineDash([6, 6]);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(goalL + goalW / 3, top);
+            ctx.lineTo(goalL + goalW / 3, groundY);
+            ctx.moveTo(goalL + goalW * 2 / 3, top);
+            ctx.lineTo(goalL + goalW * 2 / 3, groundY);
+            ctx.moveTo(goalL, top + goalH / 2);
+            ctx.lineTo(goalL + goalW, top + goalH / 2);
+            ctx.stroke();
+            ctx.restore();
+
+            const col = aim.x < -0.33 ? 0 : aim.x > 0.33 ? 2 : 1;
+            const row = aim.y >= 0.5 ? 0 : 1;
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+            ctx.fillRect(goalL + goalW / 3 * col, top + goalH / 2 * row, goalW / 3, goalH / 2);
+
+            const p = goalToScreen(aim.x, aim.y);
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, view.ballR * 0.7, 0, Math.PI * 2);
+            ctx.moveTo(p.x - view.ballR, p.y);
+            ctx.lineTo(p.x + view.ballR, p.y);
+            ctx.moveTo(p.x, p.y - view.ballR);
+            ctx.lineTo(p.x, p.y + view.ballR);
+            ctx.stroke();
+
+            ctx.save();
+            ctx.setLineDash([4, 8]);
+            ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)';
+            ctx.beginPath();
+            ctx.moveTo(view.ballX, view.ballY);
+            ctx.quadraticCurveTo((view.ballX + p.x) / 2, (view.ballY + p.y) / 2 - view.goalH * 0.3, p.x, p.y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function keeperPose() {
+            const stand = { x: 0, y: 0.42, angle: 0, arms: 0, crouch: 0 };
+            if (!shot) return stand;
+            const t = clamp((shot.time - CONTACT_SEC - KEEPER_DELAY_SEC) / KEEPER_DIVE_SEC, 0, 1);
+            if (t === 0) {
+                const ready = clamp(shot.time / CONTACT_SEC, 0, 1);
+                return { ...stand, y: stand.y - 0.06 * ready, crouch: ready };
+            }
+            const e = easeOut(t);
+            const { x, y } = shot.keeper;
+            const side = Math.sign(x);
+            const dive = side === 0
+                ? { x: 0, y: y > 0.5 ? 0.62 : 0.32, angle: 0 }
+                : { x: x * 0.9, y: y > 0.5 ? 0.62 : 0.24, angle: side * (y > 0.5 ? 1.0 : 1.4) };
+            return {
+                x: lerp(stand.x, dive.x, e),
+                y: lerp(stand.y - 0.06, dive.y, e),
+                angle: dive.angle * e,
+                arms: e,
+                crouch: 1 - e,
+            };
+        }
+
+        function drawKeeper() {
+            const pose = keeperPose();
+            const p = goalToScreen(pose.x, pose.y);
+            const s = view.goalH * 0.8;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(pose.angle);
+            ctx.lineCap = 'round';
+
+            const knee = 0.08 * pose.crouch;
+            ctx.strokeStyle = '#111827';
+            ctx.lineWidth = s * 0.09;
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.07, s * 0.08);
+            ctx.lineTo(-s * (0.1 + knee), s * 0.28);
+            ctx.lineTo(-s * 0.1, s * 0.45);
+            ctx.moveTo(s * 0.07, s * 0.08);
+            ctx.lineTo(s * (0.1 + knee), s * 0.28);
+            ctx.lineTo(s * 0.1, s * 0.45);
+            ctx.stroke();
+
+            const armAngle = lerp(0.9, 0.12, pose.arms);
+            const armLen = s * 0.32;
+            ctx.strokeStyle = '#f97316';
+            ctx.lineWidth = s * 0.075;
+            const hands = [-1, 1].map(dir => ({
+                x: dir * (s * 0.12 + Math.sin(armAngle) * armLen),
+                y: -s * 0.15 - Math.cos(armAngle) * armLen,
+            }));
+            ctx.beginPath();
+            hands.forEach((hand, i) => {
+                ctx.moveTo((i ? 1 : -1) * s * 0.12, -s * 0.15);
+                ctx.lineTo(hand.x, hand.y);
+            });
+            ctx.stroke();
+
+            ctx.fillStyle = '#f97316';
+            ctx.beginPath();
+            ctx.roundRect(-s * 0.14, -s * 0.2, s * 0.28, s * 0.32, s * 0.06);
+            ctx.fill();
+            ctx.fillStyle = '#111827';
+            ctx.font = `bold ${s * 0.14}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('1', 0, -s * 0.04);
+
+            ctx.fillStyle = '#fde68a';
+            ctx.beginPath();
+            ctx.arc(0, -s * 0.3, s * 0.09, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#3f2a14';
+            ctx.beginPath();
+            ctx.arc(0, -s * 0.33, s * 0.09, Math.PI, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#22c55e';
+            hands.forEach(hand => {
+                ctx.beginPath();
+                ctx.arc(hand.x, hand.y, s * 0.06, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function kickerPose() {
+            const { ballX, ballY, ballR } = view;
+            const idle = { x: ballX - ballR * 4.5, y: ballY + ballR * 3.2, step: 0, swing: 0 };
+            if (!shot) return idle;
+            const plant = { x: ballX - ballR * 1.9, y: ballY + ballR * 1.3 };
+            if (shot.time < RUNUP_SEC) {
+                const t = shot.time / RUNUP_SEC;
+                return { x: lerp(idle.x, plant.x, t), y: lerp(idle.y, plant.y, t), step: Math.sin(t * Math.PI * 3), swing: 0 };
+            }
+            const t = clamp((shot.time - RUNUP_SEC) / ((CONTACT_SEC - RUNUP_SEC) * 2), 0, 1);
+            return { ...plant, step: 0, swing: t };
+        }
+
+        function drawKicker() {
+            const pose = kickerPose();
+            const s = view.ballR * 7;
+            ctx.save();
+            ctx.translate(pose.x, pose.y);
+            ctx.lineCap = 'round';
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, s * 0.22, s * 0.06, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            const hipY = -s * 0.42;
+            const leftFoot = { x: -s * 0.1, y: -s * 0.02 + Math.max(0, pose.step) * -s * 0.08 };
+            const kickFoot = pose.swing > 0
+                ? {
+                    x: lerp(s * 0.12, view.ballX - pose.x - view.ballR * 0.6, Math.min(pose.swing * 2, 1)),
+                    y: lerp(s * 0.05, view.ballY - pose.y + view.ballR * 0.3, Math.min(pose.swing * 2, 1)) - Math.max(0, pose.swing - 0.5) * s * 0.4,
+                }
+                : { x: s * 0.1, y: -s * 0.02 + Math.max(0, -pose.step) * -s * 0.08 };
+
+            ctx.strokeStyle = '#1f2937';
+            ctx.lineWidth = s * 0.08;
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.06, hipY);
+            ctx.lineTo(leftFoot.x, leftFoot.y);
+            ctx.moveTo(s * 0.06, hipY);
+            ctx.lineTo(kickFoot.x, kickFoot.y);
+            ctx.stroke();
+
+            ctx.fillStyle = '#e5e7eb';
+            [leftFoot, kickFoot].forEach(foot => {
+                ctx.beginPath();
+                ctx.ellipse(foot.x, foot.y, s * 0.06, s * 0.035, 0, 0, Math.PI * 2);
+                ctx.fill();
             });
 
-            kickBtn.disabled = true;
-            resultDiv.textContent = '';
-            resultDiv.className = 'result';
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.roundRect(-s * 0.15, hipY - s * 0.04, s * 0.3, s * 0.14, s * 0.03);
+            ctx.fill();
 
-            updateScore();
+            const lean = pose.swing * s * 0.05;
+            ctx.strokeStyle = '#fcd9b6';
+            ctx.lineWidth = s * 0.06;
+            ctx.beginPath();
+            ctx.moveTo(-s * 0.15 + lean, hipY - s * 0.3);
+            ctx.lineTo(-s * 0.3 + lean, hipY - s * 0.05 - pose.swing * s * 0.12);
+            ctx.moveTo(s * 0.15 + lean, hipY - s * 0.3);
+            ctx.lineTo(s * 0.26 + lean, hipY - s * 0.08);
+            ctx.stroke();
+
+            ctx.fillStyle = '#2563eb';
+            ctx.beginPath();
+            ctx.roundRect(-s * 0.17 + lean, hipY - s * 0.36, s * 0.34, s * 0.34, s * 0.06);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${s * 0.18}px system-ui`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('10', lean, hipY - s * 0.2);
+
+            ctx.fillStyle = '#3f2a14';
+            ctx.beginPath();
+            ctx.arc(lean, hipY - s * 0.46, s * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function ballState() {
+            const { ballX, ballY, ballR } = view;
+            const rest = { x: ballX, y: ballY, r: ballR, spin: 0 };
+            if (!shot || shot.time < CONTACT_SEC) return rest;
+
+            const end = goalToScreen(shot.target.x, shot.target.y);
+            const endR = ballR * 0.45;
+            const t = clamp((shot.time - CONTACT_SEC) / FLIGHT_SEC, 0, 1);
+            if (t < 1) {
+                return {
+                    x: lerp(ballX, end.x, t),
+                    y: lerp(ballY, end.y, t) - Math.sin(Math.PI * t) * view.goalH * 0.3,
+                    r: lerp(ballR, endR, t),
+                    spin: t * 14,
+                };
+            }
+
+            const after = shot.time - CONTACT_SEC - FLIGHT_SEC;
+            if (shot.saved) {
+                const g = view.goalH * 4;
+                return {
+                    x: end.x + shot.bounce.vx * after,
+                    y: Math.min(end.y + shot.bounce.vy * after + g * after * after / 2, view.groundY + endR * 3),
+                    r: endR * (1 + after * 0.6),
+                    spin: 14 - after * 10,
+                };
+            }
+            const drop = clamp(after / 0.5, 0, 1);
+            return {
+                x: end.x,
+                y: lerp(end.y - view.goalH * 0.05, view.groundY - endR * 0.8, drop * drop),
+                r: endR * 0.9,
+                spin: 14,
+            };
+        }
+
+        function drawBall(b) {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            ctx.rotate(b.spin);
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#111827';
+            ctx.lineWidth = Math.max(1, b.r * 0.08);
+            ctx.beginPath();
+            ctx.arc(0, 0, b.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#111827';
+            for (let i = 0; i < 5; i++) {
+                const a = i * Math.PI * 2 / 5;
+                ctx.beginPath();
+                ctx.arc(Math.cos(a) * b.r * 0.72, Math.sin(a) * b.r * 0.72, b.r * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.beginPath();
+            ctx.arc(0, 0, b.r * 0.28, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, view.w, view.h);
+            drawField();
+
+            let netShake = 0;
+            if (shot && !shot.saved) {
+                const after = shot.time - CONTACT_SEC - FLIGHT_SEC;
+                if (after >= 0) netShake = Math.exp(-after * 4) * Math.cos(after * 30) * view.goalH * 0.04;
+            }
+
+            const ball = ballState();
+            const ballBehindNet = shot && !shot.saved && shot.time >= CONTACT_SEC + FLIGHT_SEC;
+            if (ballBehindNet) drawBall(ball);
+            drawGoal(netShake);
+            drawAimGuide();
+
+            const ballInFlight = shot && shot.time >= CONTACT_SEC && !ballBehindNet;
+            drawKeeper();
+            if (ballInFlight) drawBall(ball);
+
+            drawKicker();
+            if (!ballInFlight && !ballBehindNet) drawBall(ball);
+        }
+
+        function loop(now) {
+            const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0;
+            lastTime = now;
+            update(dt);
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // ---- 入力 ----
+
+        canvas.addEventListener('pointerdown', e => {
+            if (phase !== 'ready') return;
+            canvas.setPointerCapture(e.pointerId);
+            swipe = { id: e.pointerId, x: e.clientX, y: e.clientY };
+            aim = null;
         });
 
-        function updateScore() {
-            document.getElementById('goals').textContent = goals;
-            document.getElementById('saves').textContent = saves;
-            document.getElementById('remaining').textContent = MAX_ATTEMPTS - attempts;
+        canvas.addEventListener('pointermove', e => {
+            if (!swipe || e.pointerId !== swipe.id) return;
+            aim = aimFromSwipe(e.clientX - swipe.x, e.clientY - swipe.y);
+        });
+
+        function endSwipe(e, cancelled) {
+            if (!swipe || e.pointerId !== swipe.id) return;
+            const target = cancelled ? null : aimFromSwipe(e.clientX - swipe.x, e.clientY - swipe.y);
+            swipe = null;
+            aim = null;
+            if (target && phase === 'ready') kick(target);
         }
+
+        canvas.addEventListener('pointerup', e => endSwipe(e, false));
+        canvas.addEventListener('pointercancel', e => endSwipe(e, true));
+        window.addEventListener('blur', () => {
+            swipe = null;
+            aim = null;
+        });
+
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+        window.addEventListener('resize', resize);
+
+        resize();
+        startGame();
+        requestAnimationFrame(loop);
     </script>
 </body>
 </html>
