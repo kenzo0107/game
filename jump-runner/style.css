@@ -80,3 +80,38 @@ body {
 [hidden] {
     display: none !important;
 }
+
+.seeds {
+    position: absolute;
+    top: calc(env(safe-area-inset-top) + 18px);
+    right: calc(env(safe-area-inset-right) + 16px);
+    display: flex;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.seed {
+    width: 16px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255, 255, 255, 0.6);
+}
+
+.seed.got {
+    border: 2px solid #111;
+    background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.7) 0 18%, transparent 20%), var(--c);
+    animation: seed-pop 0.5s ease-out;
+}
+
+@keyframes seed-pop {
+    0% {
+        transform: scale(2.2);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}

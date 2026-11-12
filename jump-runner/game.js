@@ -55,7 +55,7 @@ function applyWorldTransform() {
 resizeCanvas();
 
 // ゲーム状態
-let gameState = 'ready'; // ready, playing, gameover
+let gameState = 'ready'; // ready, story, playing, dying, gameover
 let score = 0;
 let highScore = 0;
 let gameSpeed = 2; // 3から2に変更（難易度を下げる）
@@ -1045,10 +1045,18 @@ class Bomb {
     }
 }
 
-// ボスクラス
+const BOSS_TAUNT_AT = 50;
+const BOSS_REPLY_AT = 140;
+const BOSS_FIGHT_AT = 200;
+
 class Boss {
-    constructor(level) {
+    constructor(profile, level) {
+        this.profile = profile;
+        this.kind = profile.kind;
         this.level = level;
+        this.introTimer = 0;
+        this.showStatus = true;
+        this.hazards = [];
         this.y = 280;
         this.width = 80;
         this.height = 80;
@@ -1079,6 +1087,40 @@ class Boss {
     }
 
     update() {
+        this.animationOffset += 0.1;
+        if (this.invincibleTimer > 0) {
+            this.invincibleTimer--;
+        }
+        this.introTimer++;
+        if (this.introTimer === BOSS_TAUNT_AT) say(this, this.profile.taunt, 90);
+        if (this.introTimer === BOSS_REPLY_AT) say(player, this.profile.reply, 70);
+        this.act();
+        this.hazards.forEach((h) => h.update());
+        this.hazards = this.hazards.filter((h) => !h.done);
+    }
+
+    get fighting() {
+        return this.introTimer >= BOSS_FIGHT_AT;
+    }
+
+    get harmsOnTouch() {
+        return true;
+    }
+
+    get stompable() {
+        return false;
+    }
+
+    hazardZones() {
+        return this.hazards.filter((h) => !h.harmless).map((h) => ({ hazard: h, rect: h.zone() })).filter((z) => z.rect);
+    }
+
+    onStomped() {}
+
+    // 盾で受けても体が重なったままだと次の tick でやられるため、ボス側を離れさせる
+    onShieldHit() {}
+
+    act() {
         // 左右に移動
         this.x += this.speed * this.direction;
 
@@ -1094,21 +1136,13 @@ class Boss {
             this.y = 280;
         }
 
-        // アニメーション
-        this.animationOffset += 0.1;
-
-        // 無敵時間の更新
-        if (this.invincibleTimer > 0) {
-            this.invincibleTimer--;
-        }
-
         // 攻撃のクールダウン
         if (this.attackCooldown > 0) {
             this.attackCooldown--;
-        } else if (Math.random() < 0.015) {
+        } else if (this.fighting && Math.random() < 0.015) {
             // ランダムで弾または爆弾を発射（難易度調整：0.02→0.015）
-            this.shoot();
             this.attackCooldown = this.attackInterval;
+            this.shoot();
         }
     }
 
@@ -1166,14 +1200,19 @@ class Boss {
     draw() {
         if (!this.alive) return;
 
+        this.hazards.forEach((h) => h.draw());
         // 無敵時間中は点滅
         if (this.invincibleTimer > 0 && Math.floor(this.invincibleTimer / 5) % 2 === 0) {
             ctx.globalAlpha = 0.5;
         }
+        this.drawBody();
+        ctx.globalAlpha = 1.0;
+        if (this.showStatus) this.drawStatus();
+    }
 
-        // レベルごとに異なる見た目
-        if (this.level === 1) {
-            // レベル1: 赤い悪魔風
+    drawBody() {
+        if (this.kind === 'tsuno') {
+            // 赤い悪魔風
             ctx.fillStyle = '#8B0000';
             ctx.fillRect(this.x, this.y, this.width, this.height);
 
@@ -1220,8 +1259,8 @@ class Boss {
                 ctx.fill();
             }
 
-        } else if (this.level === 2) {
-            // レベル2: 紫の機械風ボス
+        } else if (this.kind === 'mecha') {
+            // 紫の機械風ボス
             ctx.fillStyle = '#4B0082';
             ctx.fillRect(this.x, this.y, this.width, this.height);
 
@@ -1268,7 +1307,7 @@ class Boss {
             ctx.fill();
 
         } else {
-            // レベル3以上: 黒い影風の最強ボス
+            // 黒い影風の最強ボス
             ctx.fillStyle = '#000000';
             ctx.fillRect(this.x, this.y, this.width, this.height);
 
@@ -1326,14 +1365,17 @@ class Boss {
             }
         }
 
-        // ボスレベル表示
-        ctx.globalAlpha = 1.0;
+    }
+
+    drawStatus() {
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 16px Arial';
+        ctx.font = "900 15px 'Hiragino Sans', sans-serif";
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText('BOSS Lv.' + this.level, this.x + 5, this.y - 35);
-        ctx.fillText('BOSS Lv.' + this.level, this.x + 5, this.y - 35);
+        ctx.textAlign = 'center';
+        ctx.strokeText(this.profile.name, this.x + this.width / 2, this.y - 30);
+        ctx.fillText(this.profile.name, this.x + this.width / 2, this.y - 30);
+        ctx.textAlign = 'left';
 
         // HPゲージの背景
         const hpBarWidth = this.width;
@@ -1362,6 +1404,13 @@ class Boss {
 
         ctx.globalAlpha = 1.0;
     }
+}
+
+const BOSS_CLASSES = {};
+
+function createBoss(profile, level) {
+    const BossClass = BOSS_CLASSES[profile.kind] || Boss;
+    return new BossClass(profile, level);
 }
 
 // アイテムクラス
@@ -1766,10 +1815,18 @@ function hitBoss(x, y) {
         comicSfx(bossX, bossY - 30, 'ズガガーン!!', '#FF5252', 28, 50);
         hitStop(14);
         say(player, 'やったぜ!', 90);
-        addBanner('BOSS げきは!!');
+        seedsCollected++;
+        addBanner(`いろのタネ ${seedsCollected}/${BOSS_ROSTER.length} とりもどした!`, boss.profile.color);
+        seedPickupEffect(bossX, bossY, boss.profile.color);
         addScore(500, bossX, boss.y - 20);
         playBossDefeatSound();
         boss = null;
+        updateSeedsUI();
+        if (seedsCollected === BOSS_ROSTER.length) {
+            endingTimer = ENDING_DELAY_TICKS;
+            bullets = [];
+            bombs = [];
+        }
         switchBgm(bgmAfterBoss());
     } else {
         explosionEffect(x, y);
@@ -1779,6 +1836,17 @@ function hitBoss(x, y) {
         hitStop(5);
         playStompSound();
     }
+}
+
+function stompBoss() {
+    const stomped = boss;
+    player.velocityY = -12;
+    player.isJumping = true;
+    player.fastFall = false;
+    player.stretch(1.3, 0.75);
+    stompEffect(stomped.x + stomped.width / 2, stomped.y + 10, '#795548', stomped.width);
+    hitBoss(stomped.x + stomped.width / 2, stomped.y);
+    if (stomped.alive) stomped.onStomped();
 }
 
 // ゲームオブジェクト
@@ -1794,6 +1862,11 @@ let bombs = [];
 let items = [];
 let boss = null;
 let bossLevel = 0;
+let seedsCollected = 0;
+let round = 1;
+// 撃破の演出を見せきってから紙芝居に切り替える
+const ENDING_DELAY_TICKS = 120;
+let endingTimer = 0;
 
 // 序盤は操作に慣れてもらうため、最初のボスが出るまでは速くしない。ボス戦中はスコアが増えないので、実際に速くなるのは倒したあとから
 function speedGainPerFrame() {
@@ -2307,6 +2380,9 @@ function init() {
     clearEffects();
     boss = null;
     bossLevel = 0;
+    seedsCollected = 0;
+    round = 1;
+    endingTimer = 0;
     nextBossScore = 3000;
     score = 0;
     highScore = loadHighScore();
@@ -2340,6 +2416,7 @@ function init() {
     stopMusic();
     currentBgmType = 'normal';
 
+    gloom = gloomTarget();
     updateUI();
 }
 
@@ -2349,6 +2426,7 @@ const scoreElement = document.getElementById('score');
 function updateUI() {
     scoreElement.textContent = score;
     scoreElement.hidden = gameState !== 'playing' && gameState !== 'dying';
+    updateSeedsUI();
 }
 
 function addScore(points, x, y, color = '#FFD700') {
@@ -2498,7 +2576,9 @@ function drawFrozenScene() {
     drawSky();
     for (const list of [clouds, mountains, trees]) list.forEach((o) => o.draw());
     drawGround();
-    for (const list of [groundLines, obstacles, enemies, bullets, bombs, items, coins]) list.forEach((o) => o.draw());
+    groundLines.forEach((o) => o.draw());
+    drawGloom(gloom);
+    for (const list of [obstacles, enemies, bullets, bombs, items, coins]) list.forEach((o) => o.draw());
     if (boss) boss.draw();
 }
 
@@ -2616,6 +2696,8 @@ function tick() {
             groundLines.splice(i, 1);
         }
     }
+    updateGloom();
+    drawGloom(gloom);
 
     // スコア更新（ボス戦中は増えない）
     if (!boss) {
@@ -2640,7 +2722,7 @@ function tick() {
     // ボス出現判定（3000, 6000, 9000...）
     if (!boss && score >= nextBossScore) {
         bossLevel++;
-        boss = new Boss(bossLevel);
+        boss = createBoss(BOSS_ROSTER[seedsCollected], bossLevel);
         addBanner('WARNING!! BOSS', '#FF5252');
         shakeScreen(8);
         focusLines(player.x + player.width / 2, player.y, 40, '#4A148C');
@@ -2999,14 +3081,27 @@ function tick() {
         boss.draw();
 
         if (player.alive) {
-            // プレイヤーとボスの衝突判定（ダメージを受ける）
-            if (checkCollision(player.hitbox(), boss)) {
+            const zone = boss.hazardZones().find((z) => checkCollision(player.hitbox(), z.rect));
+            if (boss.stompable && checkStomp(player, boss)) {
+                stompBoss();
+            } else if (zone) {
+                if (player.hasShield) {
+                    player.hasShield = false;
+                    zone.hazard.harmless = true;
+                    guardReaction(player.x + player.width / 2, player.y + player.height / 2);
+                    playStompSound();
+                    updateUI();
+                } else if (!player.hasStarPower) {
+                    killPlayer();
+                }
+            } else if (boss.harmsOnTouch && checkCollision(player.hitbox(), boss)) {
                 // シールドがあれば1回防御
                 if (player.hasShield) {
                     player.hasShield = false;
                     guardReaction(player.x + player.width / 2, player.y + player.height / 2);
                     playStompSound(); // シールド発動音
                     updateUI();
+                    boss.onShieldHit();
                 } else if (!player.hasStarPower) {
                     // スターパワー中は無敵
                     killPlayer();
@@ -3035,6 +3130,24 @@ function tick() {
 
     updateEffects();
     drawEffects();
+
+    if (player.alive && endingTimer > 0 && --endingTimer === 0) startEnding();
+}
+
+function startEnding() {
+    stopMusic();
+    playBossDefeatSound();
+    playStory(endingPanels(round + 1), () => {
+        round++;
+        seedsCollected = 0;
+        enemies = [];
+        bullets = [];
+        bombs = [];
+        clearEffects();
+        addBanner(`${round}しゅうめ スタート!`, '#CE93D8');
+        updateUI();
+        switchBgm(bgmAfterBoss());
+    });
 }
 
 function drawOverlay(lines, { gloom = false } = {}) {
@@ -3093,6 +3206,7 @@ function drawBackdrop() {
     applyWorldTransform();
     drawSky();
     drawGround();
+    drawGloom(gloom);
     player.draw();
 }
 
@@ -3100,6 +3214,7 @@ function drawTitle() {
     drawBackdrop();
     drawOverlay([
         { text: 'ジャンプランナー', size: 1.1, comic: true },
+        { text: 'カゲノオウから いろのタネを とりもどせ!', size: 0.38, color: '#CE93D8' },
         { text: 'タップしてスタート', size: 0.5 },
         { text: 'タップでジャンプ / 下スワイプでスライディング', size: 0.32, color: '#FFD700' },
     ]);
@@ -3129,6 +3244,18 @@ function startGame() {
     startGameLoop();
 }
 
+function startFromTitle() {
+    if (localStorage.getItem(PROLOGUE_SEEN_KEY)) {
+        startGame();
+        return;
+    }
+    lockLandscape();
+    playStory(PROLOGUE, () => {
+        localStorage.setItem(PROLOGUE_SEEN_KEY, '1');
+        startGame();
+    });
+}
+
 // ジャンプ連打中のタップでゲームオーバー直後に即リスタートしてしまわないよう、少し待つ
 const RESTART_DELAY_MS = 800;
 
@@ -3137,8 +3264,10 @@ let gestureJump = null;
 function handleTap() {
     if (gameState === 'playing') {
         gestureJump = player.jump();
+    } else if (gameState === 'story') {
+        advanceStory();
     } else if (gameState === 'ready') {
-        startGame();
+        startFromTitle();
     } else if (gameState === 'gameover' && performance.now() - gameOverAt >= RESTART_DELAY_MS) {
         startGame();
     }
