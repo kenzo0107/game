@@ -1,5 +1,7 @@
 // キャンバス設定
 const canvas = document.getElementById('gameCanvas');
+const stage = document.getElementById('stage');
+const isStageRotated = () => getComputedStyle(stage).transform !== 'none';
 const screenCtx = canvas.getContext('2d');
 // 処理落ちの追いつき分の進行では描画を捨てる。更新と描画が絡み合ったコードを分離する大改修を避けるため、描画先を差し替える
 // メソッドが undefined を返すと createLinearGradient().addColorStop() のような呼び出しで例外になるため、自身を返す
@@ -25,8 +27,8 @@ const JUMP_CANCEL_FRAMES = 12;
 const view = { width: 850, top: 0, bottom: WORLD_HEIGHT, scale: 1, cssWidth: 0, cssHeight: 0, dpr: 1 };
 
 function resizeCanvas() {
-    const cssWidth = window.innerWidth;
-    const cssHeight = window.innerHeight;
+    const cssWidth = stage.clientWidth;
+    const cssHeight = stage.clientHeight;
     // 3 倍などの高密度画面で端末の解像度どおりに描くと描画が重くなる一方で見た目の差はほぼないため、2 倍で打ち止めにする
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(cssWidth * dpr);
@@ -3101,11 +3103,10 @@ function drawTitle() {
         { text: 'ジャンプランナー', size: 1.1, comic: true },
         { text: 'タップしてスタート', size: 0.5 },
         { text: 'タップでジャンプ / 下スワイプでスライディング', size: 0.32, color: '#FFD700' },
-        { text: 'スマホは よこむきにして あそんでね', size: 0.32 },
     ]);
 }
 
-// Android の Chrome は全画面中でないと向きを固定できない。iOS の Safari は固定できないため、タイトルの注意書きで横向きをすすめる
+// Android の Chrome は全画面中でないと向きを固定できない。iOS の Safari は固定できないため、CSS で画面を回して横向きにする
 function lockLandscape() {
     if (!matchMedia('(pointer: coarse)').matches || !screen.orientation?.lock) return;
     const lock = () => screen.orientation.lock('landscape').catch(() => {});
@@ -3155,15 +3156,20 @@ function handleSlide() {
 const SWIPE_DOWN_PX = 30;
 let swipeStartY = null;
 
+// 画面を 90 度回しているときは、ゲーム内の下方向が画面の左方向になる
+function downwardPosition(e) {
+    return isStageRotated() ? -e.clientX : e.clientY;
+}
+
 document.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.back')) return;
     e.preventDefault();
-    swipeStartY = e.clientY;
+    swipeStartY = downwardPosition(e);
     handleTap();
 });
 
 document.addEventListener('pointermove', (e) => {
-    if (swipeStartY === null || e.clientY - swipeStartY < SWIPE_DOWN_PX) return;
+    if (swipeStartY === null || downwardPosition(e) - swipeStartY < SWIPE_DOWN_PX) return;
     swipeStartY = null;
     handleSlide();
 });
