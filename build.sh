@@ -28,8 +28,8 @@ for entry in "${GAMES[@]}"; do
   case "$type" in
     vite)
       # npm run build の tsc は未使用変数などでも失敗するため、公開用には型チェックを挟まない
-      # minify は設定に terser を指定していても未インストールなことがあるため esbuild に固定する
-      (cd "$name" && npm ci && npx vite build --base=./ --minify esbuild --outDir "../$dest" --emptyOutDir)
+      # minify は設定に terser を指定していても未インストールなことがあるため、Vite 8 に同梱される oxc に固定する
+      (cd "$name" && npm ci && npx vite build --base=./ --minify oxc --outDir "../$dest" --emptyOutDir)
       ;;
     tsc)
       (cd "$name" && npm ci && npm run build)
