@@ -3085,10 +3085,23 @@ function drawTitle() {
         { text: 'ジャンプランナー', size: 1.1, comic: true },
         { text: 'タップしてスタート', size: 0.5 },
         { text: 'タップでジャンプ / 下スワイプでスライディング', size: 0.32, color: '#FFD700' },
+        { text: 'スマホは よこむきにして あそんでね', size: 0.32 },
     ]);
 }
 
+// Android の Chrome は全画面中でないと向きを固定できない。iOS の Safari は固定できないため、タイトルの注意書きで横向きをすすめる
+function lockLandscape() {
+    if (!matchMedia('(pointer: coarse)').matches || !screen.orientation?.lock) return;
+    const lock = () => screen.orientation.lock('landscape').catch(() => {});
+    if (document.fullscreenElement || !document.documentElement.requestFullscreen) {
+        lock();
+        return;
+    }
+    document.documentElement.requestFullscreen().then(lock, () => {});
+}
+
 function startGame() {
+    lockLandscape();
     init();
     gameState = 'playing';
     updateUI();
