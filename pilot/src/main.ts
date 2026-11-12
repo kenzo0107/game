@@ -9,7 +9,7 @@ class Game {
   private renderer: THREE.WebGLRenderer;
   private aircraft: Aircraft;
   private input: InputController;
-  private clock: THREE.Clock;
+  private timer: THREE.Timer;
   private explosion: Explosion | null;
   private gameOver: boolean;
   private landingSuccess: boolean;
@@ -23,7 +23,8 @@ class Game {
       10000
     );
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.clock = new THREE.Clock();
+    this.timer = new THREE.Timer();
+    this.timer.connect(document);
     this.explosion = null;
     this.gameOver = false;
     this.landingSuccess = false;
@@ -266,10 +267,11 @@ class Game {
     }
   }
 
-  private animate = (): void => {
+  private animate = (timestamp?: number): void => {
     requestAnimationFrame(this.animate);
 
-    const delta = this.clock.getDelta();
+    this.timer.update(timestamp);
+    const delta = this.timer.getDelta();
 
     // 墜落チェック
     if (!this.gameOver && this.aircraft.isCrashed()) {
