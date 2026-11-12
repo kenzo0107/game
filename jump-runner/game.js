@@ -511,7 +511,7 @@ class Obstacle {
         } else if (type === 'step') {
             this.width = 60;
             this.height = 80;
-            this.y = 280;
+            this.y = RUN_LINE_Y - this.height;
         } else if (type === 'gate') {
             // 上端は画面外まで伸ばし、ジャンプでは越えられずスライディングでしかくぐれないようにする
             this.width = 34;
@@ -631,6 +631,11 @@ class Obstacle {
         return this.x + this.width < 0;
     }
 
+    // 段差の右端から降りる途中は体の左半分が段差に重なるが、押し戻すのは左からぶつかったときだけにする
+    isBehind(character) {
+        return character.x + character.width / 2 > this.x + this.width / 2;
+    }
+
     // 坂道や段差の上に乗れるかチェック
     canStandOn(character) {
         if (this.type === 'slope_up' || this.type === 'slope_down' || this.type === 'step') {
@@ -643,8 +648,11 @@ class Obstacle {
                     const feetToTop = character.feetY - character.y;
                     return { canStand: true, groundY: this.runLineY - this.height * rise - feetToTop };
                 } else if (this.type === 'step') {
-                    // 段差の上
-                    return { canStand: true, groundY: this.y };
+                    // 横から入り込んだときに上へ移動させないよう、前のフレームで足が上面より上にあったときだけ乗せる
+                    const feetToTop = character.feetY - character.y;
+                    if (character.feetY - character.velocityY <= this.y + 0.5) {
+                        return { canStand: true, groundY: this.y - feetToTop };
+                    }
                 }
             }
         }
@@ -2764,7 +2772,7 @@ function tick() {
         }
 
         // ブロックとの衝突判定（押し戻される）
-        if (player.alive && obstacles[i].type === 'block' && checkCollision(player.hitbox(), obstacles[i])) {
+        if (player.alive && ['block', 'step'].includes(obstacles[i].type) && checkCollision(player.hitbox(), obstacles[i]) && !obstacles[i].isBehind(player)) {
             // ブロックに当たったらプレイヤーを左に押し戻す
             player.x -= gameSpeed * 1.5; // ブロックの速度より少し速く押し戻す
             pushedReaction();
@@ -2775,7 +2783,7 @@ function tick() {
             pushedReaction();
         }
 
-        if (['hole', 'block', 'gate'].includes(obstacles[i].type)) {
+        if (['hole', 'block', 'gate', 'step'].includes(obstacles[i].type)) {
             rewardPass(obstacles[i]);
         }
     }
