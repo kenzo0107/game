@@ -169,6 +169,8 @@ cat >"$OUT_DIR/index.html" <<EOF
         --px: 4px;
       }
       * { box-sizing: border-box; }
+      /* ブラウザ標準の引っ張って更新と自前の処理が二重に動かないよう、標準の挙動を止める */
+      html, body { overscroll-behavior-y: none; }
       html { background: var(--bg); }
       body {
         margin: 0;
@@ -367,6 +369,22 @@ cat >"$OUT_DIR/index.html" <<EOF
         letter-spacing: 0.15em;
       }
       .keys { color: var(--cyan); }
+      .pull {
+        position: fixed;
+        top: 0;
+        left: 50%;
+        z-index: 20;
+        padding: 10px 14px;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        color: var(--yellow);
+        background: var(--panel);
+        box-shadow: 0 0 0 var(--px) var(--edge), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--px) #000;
+        transform: translate(-50%, -150%);
+        pointer-events: none;
+      }
+      .pull.back { transition: transform 0.2s ease-out; }
+      .pull.offline { color: var(--pink); }
       @media (hover: none) { .keys, h2::before { display: none; } }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -375,6 +393,7 @@ cat >"$OUT_DIR/index.html" <<EOF
   </head>
   <body>
     <canvas id="stars" aria-hidden="true"></canvas>
+    <div class="pull" id="pull" aria-live="polite"></div>
     <div class="hud">
       <div><span class="label">1P</span><span class="label">CREDIT</span><span class="value" id="credit">00</span></div>
       <button type="button" id="sound" aria-pressed="true">♪ ON</button>
@@ -503,6 +522,70 @@ $links      </main>
         resize();
         addEventListener("resize", function () { resize(); if (still) draw(0); });
         requestAnimationFrame(draw);
+
+        var pull = document.getElementById("pull");
+        var PULL_TRIGGER = 70;
+        var PULL_MAX = 120;
+        var pullStartY = null;
+        var pullDistance = 0;
+        var refreshing = false;
+
+        function placePull(offset) {
+          pull.style.transform = "translate(-50%, calc(-150% + " + offset + "px))";
+        }
+        function hidePull() {
+          pull.classList.add("back");
+          placePull(0);
+        }
+        // navigator.onLine は回線につながっていなくても true になることがあるため、Service Worker の更新確認が通信できるかで判定する
+        function checkOnline() {
+          if (!navigator.onLine) return Promise.reject();
+          if (!("serviceWorker" in navigator)) return Promise.resolve();
+          return navigator.serviceWorker.getRegistration().then(function (reg) { return reg && reg.update(); });
+        }
+        function refresh() {
+          refreshing = true;
+          pull.classList.add("back");
+          placePull(PULL_TRIGGER);
+          pull.textContent = "こうしんちゅう…";
+          checkOnline().then(function () {
+            location.reload();
+          }, function () {
+            pull.textContent = "オフラインなので こうしん できません";
+            pull.classList.add("offline");
+            setTimeout(function () { hidePull(); refreshing = false; }, 1500);
+          });
+        }
+
+        document.addEventListener("touchstart", function (e) {
+          if (refreshing || scrollY > 0 || e.touches.length !== 1) return;
+          pullStartY = e.touches[0].clientY;
+          pullDistance = 0;
+          pull.classList.remove("back", "offline");
+        }, { passive: true });
+        document.addEventListener("touchmove", function (e) {
+          if (pullStartY === null) return;
+          var dy = e.touches[0].clientY - pullStartY;
+          if (dy <= 0 || scrollY > 0) {
+            pullStartY = null;
+            hidePull();
+            return;
+          }
+          e.preventDefault();
+          pullDistance = Math.min(dy * 0.5, PULL_MAX);
+          pull.textContent = pullDistance >= PULL_TRIGGER ? "↑ はなして こうしん" : "↓ ひっぱって こうしん";
+          placePull(pullDistance);
+        }, { passive: false });
+        document.addEventListener("touchend", function () {
+          if (pullStartY === null) return;
+          pullStartY = null;
+          if (pullDistance >= PULL_TRIGGER) refresh();
+          else hidePull();
+        });
+        document.addEventListener("touchcancel", function () {
+          pullStartY = null;
+          hidePull();
+        });
       })();
     </script>
     <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');</script>
