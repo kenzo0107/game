@@ -22,7 +22,8 @@ const view = { width: 850, top: 0, bottom: WORLD_HEIGHT, scale: 1, cssWidth: 0, 
 function resizeCanvas() {
     const cssWidth = window.innerWidth;
     const cssHeight = window.innerHeight;
-    const dpr = window.devicePixelRatio || 1;
+    // 3 倍などの高密度画面で端末の解像度どおりに描くと描画が重くなる一方で見た目の差はほぼないため、2 倍で打ち止めにする
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(cssWidth * dpr);
     canvas.height = Math.round(cssHeight * dpr);
 
