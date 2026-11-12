@@ -37,7 +37,7 @@ const JUMP_PLANE_LIFETIME = 8;
 const EXIT_SPEED = 8;
 
 const FREEFALL_CAMERA = { back: 9, up: 12, ahead: 4, down: 30 };
-const CANOPY_CAMERA = { back: 18, up: 6, ahead: 12, down: 9 };
+const CANOPY_CAMERA = { back: 14, up: 16, ahead: 10, down: 16 };
 
 const approach = (current: number, target: number, rate: number, delta: number): number =>
   target + (current - target) * Math.exp(-rate * delta);
