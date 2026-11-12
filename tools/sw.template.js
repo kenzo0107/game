@@ -22,11 +22,32 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return;
     const url = new URL(request.url);
     if (url.origin === self.location.origin) {
-        event.respondWith(caches.match(request, { cacheName: CACHE, ignoreSearch: true }).then((hit) => hit || fetch(request)));
+        event.respondWith(networkFirst(request));
     } else if (RUNTIME_HOSTS.includes(url.hostname)) {
         event.respondWith(staleWhileRevalidate(event, request));
     }
 });
+
+// キャッシュを先に返すと、デプロイ後に一度開き直すまで旧版が表示される。HTML だけを新しくすると旧版の JS と混ざるため、自サイトのファイルはすべてネットワークを先に見る
+// 既定の fetch だと GitHub Pages の HTTP キャッシュ(10 分)に残った旧版を拾うため、no-cache で毎回確認する
+async function networkFirst(request) {
+    try {
+        return await fetchFresh(request);
+    } catch {
+        const hit = await caches.match(request, { cacheName: CACHE, ignoreSearch: true });
+        if (hit) return hit;
+        throw new Error(`offline and not cached: ${request.url}`);
+    }
+}
+
+async function fetchFresh(request) {
+    if (request.mode !== 'navigate') return fetch(request, { cache: 'no-cache' });
+    // navigate モードの Request には RequestInit を付けられないため URL から作り直す
+    const response = await fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' });
+    if (!response.redirected) return response;
+    // Safari はリダイレクトを経たレスポンスをページ遷移の応答に使うとエラーにするため、作り直して渡す
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
 
 // Google Fonts は配信される CSS やフォントの URL がブラウザごとに変わり事前に列挙できないため、初回表示時に取ったものを使い回す
 async function staleWhileRevalidate(event, request) {
