@@ -97,15 +97,14 @@ class Player {
         this.groundY = 350;
         this.alive = true;
         this.aiJumpCooldown = 0;
-        // 二段ジャンプ関連
-        this.hasDoubleJump = false;
         this.doubleJumpUsed = false;
-        this.doubleJumpTimer = 0; // 30秒 = 1800フレーム
         // シールド関連
         this.hasShield = false;
         // スターパワー関連
         this.hasStarPower = false;
         this.starPowerTimer = 0; // 10秒 = 600フレーム
+        this.magnetTimer = 0;
+        this.powerTimer = 0;
         // アニメーション用
         this.animationFrame = 0;
         this.runPhase = 0;
@@ -191,7 +190,7 @@ class Player {
             return undo;
         }
         // 空中での二段ジャンプ
-        if (this.hasDoubleJump && !this.doubleJumpUsed) {
+        if (!this.doubleJumpUsed) {
             this.velocityY = this.jumpPower;
             this.doubleJumpUsed = true;
             this.stretch(0.75, 1.3);
@@ -282,16 +281,8 @@ class Player {
             }
         }
 
-        // 二段ジャンプタイマー処理
-        if (this.hasDoubleJump && this.doubleJumpTimer > 0) {
-            this.doubleJumpTimer--;
-            if (this.doubleJumpTimer <= 0) {
-                this.hasDoubleJump = false;
-                if (currentBgmType === 'happy') {
-                    switchBgm('normal');
-                }
-            }
-        }
+        if (this.magnetTimer > 0) this.magnetTimer--;
+        if (this.powerTimer > 0) this.powerTimer--;
 
         // スターパワータイマー処理
         if (this.hasStarPower && this.starPowerTimer > 0) {
@@ -339,29 +330,6 @@ class Player {
             ctx.shadowColor = colors[colorIndex];
             ctx.strokeRect(this.x - 5, this.y - 5, this.width + 10, this.height + 10);
             ctx.shadowBlur = 0;
-        }
-
-        // 二段ジャンプ可能な場合は翼を表示
-        if (this.isPlayer && this.hasDoubleJump && !this.dying) {
-            ctx.fillStyle = '#FFD700';
-            // 左の翼
-            ctx.beginPath();
-            ctx.moveTo(this.x, this.y + 15);
-            ctx.lineTo(this.x - 10, this.y + 5);
-            ctx.lineTo(this.x - 10, this.y + 25);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#FFA500';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            // 右の翼
-            ctx.beginPath();
-            ctx.moveTo(this.x + this.width, this.y + 15);
-            ctx.lineTo(this.x + this.width + 10, this.y + 5);
-            ctx.lineTo(this.x + this.width + 10, this.y + 25);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
         }
 
         const cx = this.x + this.width / 2;
@@ -885,8 +853,13 @@ class Enemy {
 }
 
 // 弾クラス
+const REFLECTED_BULLET_SPEED = 9;
+const ROLLING_BULLET_SPEED = 3.2;
+const BULLET_STOMP_RADIUS = 16;
+
 class Bullet {
     constructor(x, y, direction = -1, useGravity = false) {
+        this.reflected = false;
         this.x = x;
         this.y = y;
         this.width = 12; // 8から12に拡大（視認性向上）
@@ -919,7 +892,20 @@ class Bullet {
         this.useGravity = true;
     }
 
+    // 動き回るボスにまっすぐ撃ち返すと外れやすく、踏めたのに当たらない理不尽さが出るため、毎フレーム狙い直す
+    reflect() {
+        this.reflected = true;
+        this.useGravity = false;
+    }
+
     update() {
+        if (this.reflected && boss) {
+            const dx = boss.x + boss.width / 2 - this.x;
+            const dy = boss.y + boss.height / 2 - this.y;
+            const distance = Math.hypot(dx, dy) || 1;
+            this.velocityX = (dx / distance) * REFLECTED_BULLET_SPEED;
+            this.velocityY = (dy / distance) * REFLECTED_BULLET_SPEED;
+        }
         this.x += this.velocityX;
         this.y += this.velocityY;
 
@@ -929,11 +915,17 @@ class Bullet {
         }
     }
 
+    // x, y は弾の中心。小さな弾をぴったり踏むのは難しいため、踏める範囲は見た目より広く取る
+    stompBox() {
+        const r = BULLET_STOMP_RADIUS;
+        return { x: this.x - r, y: this.y - r, width: r * 2, height: r * 2 };
+    }
+
     draw() {
         if (!this.alive) return;
 
         // 外側のグロー効果（視認性向上）
-        ctx.fillStyle = 'rgba(255, 255, 0, 0.5)'; // 黄色のグロー
+        ctx.fillStyle = this.reflected ? 'rgba(118, 255, 3, 0.6)' : 'rgba(255, 255, 0, 0.5)';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.width / 2 + 4, 0, Math.PI * 2);
         ctx.fill();
@@ -945,7 +937,7 @@ class Bullet {
         ctx.fill();
 
         // 弾本体（オレンジ色で目立つように）
-        ctx.fillStyle = '#FF4500';
+        ctx.fillStyle = this.reflected ? '#64DD17' : '#FF4500';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.width / 2, 0, Math.PI * 2);
         ctx.fill();
@@ -1102,6 +1094,7 @@ class Boss {
         this.introTimer++;
         if (this.introTimer === BOSS_TAUNT_AT) say(this, this.profile.taunt, 90);
         if (this.introTimer === BOSS_REPLY_AT) say(player, this.profile.reply, 70);
+        if (this.introTimer === BOSS_FIGHT_AT) addBanner('たまを ふんで はねかえせ!', '#76FF03');
         this.act();
         this.hazards.forEach((h) => h.update());
         this.hazards = this.hazards.filter((h) => !h.done);
@@ -1117,6 +1110,10 @@ class Boss {
 
     get stompable() {
         return false;
+    }
+
+    get hittable() {
+        return true;
     }
 
     hazardZones() {
@@ -1166,15 +1163,8 @@ class Boss {
             bullet.speed = 3;
             bullet.setTargetVelocity(player.x + player.width / 2, player.y + player.height / 2);
             bullets.push(bullet);
-        } else if (attackType < 0.7) {
-            // 20%: 放物線を描く弾（1発）
-            const bullet = new Bullet(this.x, this.y + this.height / 2);
-            bullet.speed = 3;
-            // 左向き、上向きの初速を設定
-            const horizontalSpeed = -3.5;
-            const verticalSpeed = -8;
-            bullet.setArcVelocity(horizontalSpeed, verticalSpeed);
-            bullets.push(bullet);
+        } else if (attackType < 0.8) {
+            this.rollBullet();
         } else {
             // 30%: 扇状に広がる弾幕（2発、隙間をさらに広く）
             const baseAngle = Math.PI; // 左向き（180度）
@@ -1192,10 +1182,17 @@ class Boss {
         }
     }
 
-    takeDamage() {
+    // 主人公は横に動けず、放物線や扇状の弾は届く前に地面へ落ちて踏む機会にならないため、足もとを転がって必ず届く弾を撃つ
+    rollBullet() {
+        const bullet = new Bullet(this.x, player.groundY + player.height / 2);
+        bullet.velocityX = -ROLLING_BULLET_SPEED;
+        bullets.push(bullet);
+    }
+
+    takeDamage(amount = 1) {
         if (this.invincibleTimer > 0) return false;
 
-        this.hp--;
+        this.hp -= amount;
         this.invincibleTimer = 30; // 0.5秒の無敵時間
 
         if (this.hp <= 0) {
@@ -1561,8 +1558,13 @@ function digHoleAt(x) {
 
 class MechaBoss extends Boss {
     shoot() {
-        if (this.hazards.length || Math.random() < 0.4) {
+        const r = Math.random();
+        if (this.hazards.length || r < 0.3) {
             bombs.push(new Bomb(this.x, this.y + this.height / 2));
+            return;
+        }
+        if (r < 0.65) {
+            this.rollBullet();
             return;
         }
         this.hazards.push(new LaserHazard(this, Math.random() < 0.5 ? 'low' : 'high'));
@@ -1802,9 +1804,7 @@ class RivalBoss extends Boss {
     }
 }
 
-const WHALE_WING_INTERVAL = 240;
 
-// 空高くにいて二段ジャンプでしか背中に届かないため、戦いの間は羽アイテムを流し続ける
 class WhaleBoss extends Boss {
     constructor(profile, level) {
         super(profile, level);
@@ -1813,7 +1813,6 @@ class WhaleBoss extends Boss {
         this.baseY = 145;
         this.y = this.baseY;
         this.phase = 0;
-        this.wingTimer = WHALE_WING_INTERVAL - 30;
     }
 
     act() {
@@ -1828,11 +1827,6 @@ class WhaleBoss extends Boss {
         } else if (this.fighting && Math.random() < 0.02) {
             this.attackCooldown = this.attackInterval;
             this.spray();
-        }
-
-        if (this.fighting && !player.hasDoubleJump && ++this.wingTimer >= WHALE_WING_INTERVAL && !items.some((i) => i.type === 'wing')) {
-            this.wingTimer = 0;
-            items.push(new Item('wing'));
         }
     }
 
@@ -1902,7 +1896,7 @@ const KAGE_MAX_HP = 6;
 const KAGE_RAGE_HP = 3;
 const KAGE_MOVES = ['laser', 'wave', 'hole', 'rain', 'clone'];
 
-// 倒す手段は最初のボスと同じ爆弾の跳ね返しなので、技の合間に必ず爆弾を挟み、爆弾が来ないまま詰むことがないようにする
+// 技だけが続くと反撃できないまま待たされるため、技の合間に必ず爆弾か転がる弾を挟む
 class KageBoss extends Boss {
     constructor(profile, level) {
         super(profile, level);
@@ -1914,8 +1908,10 @@ class KageBoss extends Boss {
     }
 
     shoot() {
-        if (this.bombNext) {
+        if (this.bombNext && Math.random() < 0.5) {
             bombs.push(new Bomb(this.x, this.y + this.height / 2));
+        } else if (this.bombNext) {
+            this.rollBullet();
         } else {
             this.useMove(KAGE_MOVES[this.moveIndex++ % KAGE_MOVES.length]);
         }
@@ -1946,8 +1942,8 @@ class KageBoss extends Boss {
         }
     }
 
-    takeDamage() {
-        const defeated = super.takeDamage();
+    takeDamage(amount) {
+        const defeated = super.takeDamage(amount);
         if (!defeated && !this.raging && this.hp <= KAGE_RAGE_HP) {
             this.raging = true;
             this.speed *= 1.4;
@@ -2070,6 +2066,10 @@ class MoleBoss extends Boss {
         return (this.state === 'rise' || this.state === 'up') && this.invincibleTimer === 0;
     }
 
+    get hittable() {
+        return this.state === 'rise' || this.state === 'up';
+    }
+
     drawBody() {
         const bottom = this.groundBottom();
         const cx = this.x + this.width / 2;
@@ -2144,7 +2144,7 @@ function createBoss(profile, level) {
 // アイテムクラス
 class Item {
     constructor(type) {
-        this.type = type; // 'wing', 'shield', 'star'
+        this.type = type; // ITEM_LOOKS のキー
         this.x = view.width;
         this.width = 30;
         this.height = 30;
@@ -2164,39 +2164,7 @@ class Item {
     draw() {
         if (!this.alive) return;
 
-        if (this.type === 'wing') {
-            // 翼のアイテム
-            ctx.fillStyle = '#FFD700'; // 金色
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-
-            // キラキラ効果
-            ctx.strokeStyle = '#FFA500';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(this.x, this.y, this.width, this.height);
-
-            // 翼の絵
-            ctx.fillStyle = '#fff';
-            // 左の翼
-            ctx.beginPath();
-            ctx.moveTo(this.x + 8, this.y + 15);
-            ctx.lineTo(this.x + 2, this.y + 8);
-            ctx.lineTo(this.x + 2, this.y + 22);
-            ctx.closePath();
-            ctx.fill();
-            // 右の翼
-            ctx.beginPath();
-            ctx.moveTo(this.x + 22, this.y + 15);
-            ctx.lineTo(this.x + 28, this.y + 8);
-            ctx.lineTo(this.x + 28, this.y + 22);
-            ctx.closePath();
-            ctx.fill();
-
-            // 中央の丸
-            ctx.fillStyle = '#FFD700';
-            ctx.beginPath();
-            ctx.arc(this.x + 15, this.y + 15, 5, 0, Math.PI * 2);
-            ctx.fill();
-        } else if (this.type === 'shield') {
+        if (this.type === 'shield') {
             // シールドのアイテム
             ctx.fillStyle = '#00BFFF'; // 青色
             ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -2268,12 +2236,54 @@ class Item {
             ctx.strokeStyle = '#FFD700';
             ctx.lineWidth = 1;
             ctx.stroke();
+        } else {
+            const look = ITEM_LOOKS[this.type];
+            ctx.fillStyle = look.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.strokeStyle = look.border;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(this.x, this.y, this.width, this.height);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = '20px sans-serif';
+            ctx.fillText(look.icon, this.x + this.width / 2, this.y + this.height / 2 + 1);
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
         }
     }
 
     isOffScreen() {
         return this.x + this.width < 0;
     }
+}
+
+const ITEM_LOOKS = {
+    heart: { icon: '❤️', color: '#FFCDD2', border: '#E53935' },
+    magnet: { icon: '🧲', color: '#E1F5FE', border: '#0288D1' },
+    boots: { icon: '👢', color: '#FFE0B2', border: '#EF6C00' },
+    clock: { icon: '⏰', color: '#F3E5F5', border: '#7B1FA2' },
+};
+const MAGNET_TICKS = 600;
+const MAGNET_RANGE = 260;
+const MAGNET_PULL_SPEED = 9;
+const POWER_TICKS = 900;
+const POWER_DAMAGE = 2;
+// 時間の進みが半分になるため、240 tick で実時間の 8 秒になる
+const SLOW_TICKS = 240;
+const SLOW_RATE = 0.5;
+const HEART_ITEM_CHANCE = 0.1;
+
+function pickItemType() {
+    if (Math.random() < HEART_ITEM_CHANCE) return 'heart';
+    const active = {
+        shield: player.hasShield,
+        star: player.hasStarPower,
+        magnet: player.magnetTimer > 0,
+        boots: player.powerTimer > 0,
+        clock: slowTicks > 0,
+    };
+    const choices = Object.keys(active).filter((type) => !active[type]);
+    return choices.length ? choices[Math.floor(Math.random() * choices.length)] : 'heart';
 }
 
 // 背景要素クラス
@@ -2533,7 +2543,8 @@ function updateTerrain() {
 }
 
 function hitBoss(x, y) {
-    const defeated = boss.takeDamage();
+    const powered = player.powerTimer > 0;
+    const defeated = boss.takeDamage(powered ? POWER_DAMAGE : 1);
     if (defeated) {
         const bossX = boss.x + boss.width / 2;
         const bossY = boss.y + boss.height / 2;
@@ -2557,14 +2568,43 @@ function hitBoss(x, y) {
             bullets = [];
             bombs = [];
         }
-        switchBgm(bgmAfterBoss());
+        switchBgm('normal');
     } else {
-        explosionEffect(x, y);
-        addPopup(x, y - 30, 'HIT!', '#FF5252', 22);
+        explosionEffect(x, y, powered ? 1.6 : 1);
+        addPopup(x, y - 30, powered ? 'ダブルHIT!!' : 'HIT!', '#FF5252', 22);
         comicSfx(x - 20, y + 10, 'ドゴォ!', '#FFA726', 20, 30);
         focusLines(x, y, 12);
         hitStop(5);
         playStompSound();
+    }
+}
+
+function pullCoin(coin) {
+    const dx = player.x + player.width / 2 - (coin.x + coin.width / 2);
+    const dy = player.y + player.height / 2 - (coin.y + coin.height / 2);
+    const distance = Math.hypot(dx, dy);
+    if (distance > MAGNET_RANGE || distance === 0) return;
+    const step = Math.min(MAGNET_PULL_SPEED, distance);
+    coin.x += (dx / distance) * step;
+    coin.y += (dy / distance) * step;
+}
+
+function stompBullet(bullet) {
+    player.velocityY = -10;
+    player.isJumping = true;
+    player.fastFall = false;
+    player.stretch(1.3, 0.75);
+    stompEffect(bullet.x, bullet.y + bullet.height / 2, '#FF4500', 24);
+    hitStop(4);
+    playItemSound();
+    if (boss) {
+        bullet.reflect();
+        sparkle(bullet.x, bullet.y, '#76FF03', 10);
+        addPopup(player.x + player.width / 2, player.y - 20, 'はね返し!', '#76FF03', 16);
+        comicSfx(player.x + player.width + 20, player.y, 'カキーン!', '#76FF03', 18, 30);
+    } else {
+        addScore(30, bullet.x, bullet.y - 20);
+        comicSfx(bullet.x, bullet.y - 20, 'パキッ', '#FFAB40', 14, 24);
     }
 }
 
@@ -2594,6 +2634,7 @@ let boss = null;
 let bossLevel = 0;
 let seedsCollected = 0;
 let round = 1;
+let slowTicks = 0;
 const START_LIVES = 3;
 let lives = START_LIVES;
 // 撃破の演出を見せきってから紙芝居に切り替える
@@ -2648,7 +2689,7 @@ let backgroundTimer = 0;
 let audioContext = null;
 let masterGain = null;
 let musicInterval = null;
-let currentBgmType = 'normal'; // 'normal' または 'happy'
+let currentBgmType = 'normal'; // 'normal' または 'battle'
 
 // 音楽の初期化
 function initAudio() {
@@ -3029,52 +3070,6 @@ function stopMusic() {
     }
 }
 
-// ご機嫌なメロディーパターン（より明るくアップテンポ）
-const happyMelodyPattern = [
-    // C5, E5, G5, C6, G5, E5, C5, G5
-    [523.25, 0.12], [659.25, 0.12], [783.99, 0.12], [1046.50, 0.12],
-    [783.99, 0.12], [659.25, 0.12], [523.25, 0.12], [783.99, 0.12],
-    // D5, F5, A5, D6, A5, F5, D5, A5
-    [587.33, 0.12], [698.46, 0.12], [880.00, 0.12], [1174.66, 0.12],
-    [880.00, 0.12], [698.46, 0.12], [587.33, 0.12], [880.00, 0.12]
-];
-
-// ご機嫌なベースパターン
-const happyBassPattern = [
-    [130.81, 0.24], [146.83, 0.24], [164.81, 0.24], [146.83, 0.24],
-    [130.81, 0.24], [146.83, 0.24], [164.81, 0.24], [146.83, 0.24]
-];
-
-// ご機嫌なBGM再生
-function playHappyMusic() {
-    if (!audioContext) return;
-
-    let noteIndex = 0;
-    const beatDuration = 0.12; // より速いテンポ
-
-    function playNextNote() {
-        const currentTime = audioContext.currentTime;
-
-        // メロディー（明るい音色）
-        const [melodyFreq, melodyDur] = happyMelodyPattern[noteIndex % happyMelodyPattern.length];
-        playTone(melodyFreq, melodyDur, currentTime, 'sine');
-
-        // ベース（2拍ごと）
-        if (noteIndex % 2 === 0) {
-            const [bassFreq, bassDur] = happyBassPattern[Math.floor(noteIndex / 2) % happyBassPattern.length];
-            playTone(bassFreq, bassDur, currentTime, 'triangle');
-        }
-
-        // リズム（より高い音でキラキラ感）
-        playTone(10000, 0.04, currentTime, 'square');
-
-        noteIndex++;
-    }
-
-    // 定期的に音を鳴らす
-    musicInterval = setInterval(playNextNote, beatDuration * 1000);
-}
-
 const battleMelodyPattern = [
     440.00, 440.00, 523.25, 440.00, 587.33, 440.00, 659.25, 587.33,
     440.00, 440.00, 523.25, 440.00, 783.99, 698.46, 659.25, 587.33,
@@ -3110,16 +3105,12 @@ function playBattleMusic() {
     musicInterval = setInterval(playNextNote, beatDuration * 1000);
 }
 
-const bgmPlayers = { normal: playMusic, happy: playHappyMusic, battle: playBattleMusic };
+const bgmPlayers = { normal: playMusic, battle: playBattleMusic };
 
 function switchBgm(type) {
     stopMusic();
     currentBgmType = type;
     bgmPlayers[type]();
-}
-
-function bgmAfterBoss() {
-    return player.hasDoubleJump ? 'happy' : 'normal';
 }
 
 // 初期化
@@ -3154,6 +3145,7 @@ function resetStage() {
     clearEffects();
     obstacleTimer = 0;
     backgroundTimer = 0;
+    slowTicks = 0;
     resetTerrain();
 
     // プレイヤー1人
@@ -3192,19 +3184,32 @@ function continueGame() {
     addBanner(`のこり ${lives}き がんばれ!`, '#69F0AE');
     updateUI();
     playStartSound();
-    switchBgm(bgmAfterBoss());
+    switchBgm('normal');
     startGameLoop();
 }
 
 // UI更新
 const scoreElement = document.getElementById('score');
 const livesElement = document.getElementById('lives');
+const buffsElement = document.getElementById('buffs');
+
+function buffsText() {
+    const secondsLeft = (ticks, rate = 1) => Math.ceil(ticks / 60 / rate);
+    return [
+        player.magnetTimer > 0 && `🧲${secondsLeft(player.magnetTimer)}`,
+        player.powerTimer > 0 && `👢${secondsLeft(player.powerTimer)}`,
+        slowTicks > 0 && `⏰${secondsLeft(slowTicks, SLOW_RATE)}`,
+    ].filter(Boolean).join(' ');
+}
 
 function updateUI() {
     scoreElement.textContent = score;
     scoreElement.hidden = gameState !== 'playing' && gameState !== 'dying';
     livesElement.textContent = `×${lives}`;
     livesElement.hidden = scoreElement.hidden;
+    const buffs = buffsText();
+    if (buffsElement.textContent !== buffs) buffsElement.textContent = buffs;
+    buffsElement.hidden = scoreElement.hidden || !buffs;
     updateSeedsUI();
 }
 
@@ -3271,6 +3276,12 @@ function checkStomp(player, enemy) {
 }
 
 
+// 落下が速いと足が弾の上半分を1フレームで通り過ぎ、踏んだのにやられることがあるため、前のフレームの足の位置で判定する
+function checkBulletStomp(player, bullet) {
+    const prevBottom = player.y + player.height - player.velocityY;
+    return player.velocityY > 0 && prevBottom <= bullet.y && checkCollision(player, bullet.stompBox());
+}
+
 function drawSky() {
     ctx.fillStyle = SKY_COLOR;
     ctx.fillRect(0, view.top, view.width, view.bottom - view.top);
@@ -3310,14 +3321,17 @@ function startGameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
+// 個々の物の速さを落とすと、速度に合わせた穴の幅やジャンプの軌道とずれて越えられなくなるため、時間の進みそのものを遅らせる
 function gameLoop(now) {
-    tickBacklog = Math.min(tickBacklog + now - lastFrameAt, TICK_MS * MAX_TICKS_PER_FRAME);
+    const rate = slowTicks > 0 && gameState === 'playing' ? SLOW_RATE : 1;
+    tickBacklog = Math.min(tickBacklog + (now - lastFrameAt) * rate, TICK_MS * MAX_TICKS_PER_FRAME);
     lastFrameAt = now;
     // 60Hz 画面で毎フレームの間隔がわずかに揺れても 0 回/2 回のステップにぶれないよう、半ステップ分を閾値にする
     while (tickBacklog > TICK_MS / 2 && (gameState === 'playing' || gameState === 'dying')) {
         tickBacklog -= TICK_MS;
         ctx = tickBacklog > TICK_MS / 2 ? nullCtx : screenCtx;
         tick();
+        if (slowTicks > 0 && --slowTicks === 0) addPopup(player.x + player.width / 2, player.y - 30, 'もとに もどった', '#CE93D8', 14);
     }
     ctx = screenCtx;
 
@@ -3343,6 +3357,7 @@ function killPlayer() {
     player.velocityY = 0;
     gameState = 'dying';
     deathTimer = 0;
+    slowTicks = 0;
     const cx = player.x + player.width / 2;
     const cy = player.y + player.height / 2;
     starBurst(cx, cy, 10);
@@ -3532,26 +3547,7 @@ function tick() {
         // 8%の確率でアイテムを生成
         if (rand < 0.08) {
             // ランダムにアイテムタイプを選択
-            const itemRand = Math.random();
-            let itemType;
-            if (!player.hasDoubleJump && itemRand < 0.4) {
-                itemType = 'wing';
-            } else if (!player.hasShield && itemRand < 0.7) {
-                itemType = 'shield';
-            } else if (!player.hasStarPower && itemRand >= 0.7) {
-                itemType = 'star';
-            } else {
-                // すべて所持している場合は別のアイテムをランダムに生成
-                const fallbackRand = Math.random();
-                if (fallbackRand < 0.33) {
-                    itemType = 'wing';
-                } else if (fallbackRand < 0.66) {
-                    itemType = 'shield';
-                } else {
-                    itemType = 'star';
-                }
-            }
-            items.push(new Item(itemType));
+            items.push(new Item(pickItemType()));
         }
         // 25%の確率で敵を生成（30%から25%に変更）
         else if (rand < 0.36) {
@@ -3760,6 +3756,21 @@ function tick() {
             continue;
         }
 
+        if (bullets[i].reflected) {
+            if (boss && boss.hittable && checkCollision(boss, bullets[i].stompBox())) {
+                const bullet = bullets[i];
+                bullets.splice(i, 1);
+                hitBoss(bullet.x, bullet.y);
+            }
+            continue;
+        }
+
+        if (player.alive && !player.sliding && checkBulletStomp(player, bullets[i])) {
+            stompBullet(bullets[i]);
+            if (!boss) bullets.splice(i, 1);
+            continue;
+        }
+
         // プレイヤーとの衝突判定
         if (player.alive && checkCollision(player.hitbox(), bullets[i])) {
             // スターパワー中は弾を消す
@@ -3830,20 +3841,30 @@ function tick() {
         // プレイヤーとの取得判定
         if (player.alive && checkCollision(player.hitbox(), items[i])) {
             const item = items[i];
-            const label = { wing: '2だんジャンプ!', shield: 'シールド!', star: 'むてき!' }[item.type];
+            const label = {
+                shield: 'シールド!', star: 'むてき!', heart: '1UP!', magnet: 'マグネット!', boots: 'パワーブーツ!', clock: 'スロー!',
+            }[item.type];
             sparkle(item.x + item.width / 2, item.y + item.height / 2, '#FFFFFF', 12);
             jumpRing(item.x + item.width / 2, item.y + item.height / 2);
             addPopup(item.x + item.width / 2, item.y - 15, label, '#80DEEA', 18);
             comicSfx(item.x + item.width / 2, item.y - 40, 'キュピーン!', '#FFF176', 18, 34);
             focusLines(item.x + item.width / 2, item.y + item.height / 2, 16, '#FFFFFF');
             say(player, item.type === 'star' ? 'むてきだ~!' : 'やった~!');
-            if (items[i].type === 'wing') {
-                player.hasDoubleJump = true;
-                player.doubleJumpTimer = 1800; // 30秒 (60fps * 30秒)
+            if (item.type === 'heart') {
+                lives++;
                 playItemSound();
-                if (!boss) {
-                    switchBgm('happy');
-                }
+                updateUI();
+            } else if (item.type === 'magnet') {
+                player.magnetTimer = MAGNET_TICKS;
+                playItemSound();
+                updateUI();
+            } else if (item.type === 'boots') {
+                player.powerTimer = POWER_TICKS;
+                playItemSound();
+                updateUI();
+            } else if (item.type === 'clock') {
+                slowTicks = SLOW_TICKS;
+                playItemSound();
                 updateUI();
             } else if (items[i].type === 'shield') {
                 player.hasShield = true;
@@ -3897,6 +3918,7 @@ function tick() {
     for (let i = coins.length - 1; i >= 0; i--) {
         const coin = coins[i];
         coin.update();
+        if (player.magnetTimer > 0 && player.alive) pullCoin(coin);
         coin.draw();
         if (coin.isOffScreen()) {
             coins.splice(i, 1);
@@ -3930,7 +3952,7 @@ function startEnding() {
         clearEffects();
         addBanner(`${round}しゅうめ スタート!`, '#CE93D8');
         updateUI();
-        switchBgm(bgmAfterBoss());
+        switchBgm('normal');
     });
 }
 
@@ -4009,7 +4031,7 @@ function drawTitle() {
         { text: 'ジャンプランナー', size: 1.1, comic: true },
         { text: 'カゲノオウから いろのタネを とりもどせ!', size: 0.38, color: '#CE93D8' },
         { text: 'タップしてスタート', size: 0.5 },
-        { text: 'タップでジャンプ / 下スワイプでスライディング', size: 0.32, color: '#FFD700' },
+        { text: 'タップでジャンプ(くうちゅうで もう1かい) / 下スワイプでスライディング', size: 0.32, color: '#FFD700' },
     ]);
 }
 

@@ -4,7 +4,7 @@ const BOSS_ROSTER = [
     { kind: 'golem', name: 'ドスドスゴーレム', color: '#FFEE58', taunt: 'ゴゴゴ… ふみつぶして やる', reply: 'ふみつけて やるぜ!' },
     { kind: 'mole', name: 'アナホリモグーラ', color: '#66BB6A', taunt: 'タネは ちかに かくしたモグ!', reply: 'ほりだしてやる!' },
     { kind: 'rival', name: 'ライバル・アカボシ', color: '#29B6F6', taunt: 'タネが ほしけりゃ おいついてみな!', reply: 'まけないぜ!' },
-    { kind: 'whale', name: 'クモノクジラ', color: '#3F51B5', taunt: 'くもの うえまで こられるかな~', reply: 'はねで とんでいくぜ!' },
+    { kind: 'whale', name: 'クモノクジラ', color: '#3F51B5', taunt: 'くもの うえまで こられるかな~', reply: '2だんジャンプで とどくぜ!' },
     { kind: 'kage', name: 'カゲノオウ', color: '#AB47BC', taunt: 'すべての いろは わがものだ…', reply: 'みんなの いろを かえせ!' },
 ];
 
