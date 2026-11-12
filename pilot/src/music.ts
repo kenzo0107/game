@@ -1,73 +1,9 @@
+import { Song, SONGS } from './songs';
+
 export type MusicMode = 'off' | 'menu' | 'flight';
 
-type Chord = { bass: number; voicing: number[] };
-type Note = [step: number, midi: number, length: number];
-
-const BPM = 86;
-const STEP = 60 / BPM / 4;
-const STEPS_PER_BAR = 16;
-const SWING = STEP * 0.12;
 const LOOKAHEAD = 0.3;
-
-const chord = (bass: number, ...voicing: number[]): Chord => ({ bass, voicing });
-
-const SECTION_A: Chord[] = [
-  chord(38, 54, 57, 61, 64), // Dmaj9
-  chord(35, 57, 61, 62, 66), // Bm9
-  chord(31, 54, 57, 59, 62), // Gmaj9
-  chord(33, 55, 59, 62, 64), // A7sus4
-  chord(30, 57, 61, 64, 66), // F#m7
-  chord(35, 57, 61, 62, 66), // Bm9
-  chord(28, 55, 59, 62, 66), // Em9
-  chord(31, 55, 58, 62, 64), // Gm6
-];
-
-const SECTION_B: Chord[] = [
-  chord(34, 57, 60, 62, 65), // Bbmaj9
-  chord(36, 55, 59, 62, 64), // C6/9
-  chord(38, 54, 57, 61, 64), // Dmaj9
-  chord(35, 57, 61, 62, 66), // Bm9
-  chord(31, 54, 57, 59, 62), // Gmaj9
-  chord(30, 57, 61, 64, 66), // F#m7
-  chord(28, 55, 59, 62, 66), // Em9
-  chord(33, 55, 59, 62, 64), // A7sus4
-];
-
-const MELODY_A: Note[] = [
-  [4, 69, 2], [6, 71, 2], [8, 73, 6], [14, 76, 2],
-  [16, 78, 8], [24, 76, 4], [28, 73, 4],
-  [32, 74, 6], [38, 71, 2], [40, 69, 8],
-  [54, 71, 2], [56, 69, 2], [58, 67, 2], [60, 64, 4],
-  [66, 69, 2], [68, 73, 2], [70, 76, 10],
-  [82, 78, 2], [84, 76, 2], [86, 74, 2], [88, 73, 8],
-  [96, 71, 4], [100, 74, 4], [104, 78, 8],
-  [112, 76, 6], [118, 74, 2], [120, 70, 8],
-];
-
-const MELODY_B: Note[] = [
-  [0, 74, 4], [4, 77, 4], [8, 76, 8],
-  [16, 74, 4], [20, 79, 4], [24, 76, 8],
-  [32, 78, 12], [44, 76, 2], [46, 78, 2],
-  [48, 81, 8], [56, 78, 4], [60, 74, 4],
-  [64, 76, 4], [68, 78, 4], [72, 74, 6], [78, 71, 2],
-  [80, 73, 8], [88, 69, 4], [92, 73, 4],
-  [96, 71, 2], [98, 74, 2], [100, 78, 4], [104, 76, 8],
-  [112, 74, 6], [118, 76, 2], [120, 69, 8],
-];
-
-// A(メロ) → B(メロ) → A(伴奏のみ) → B(伴奏のみ)。メロディを常に鳴らすと長いフライトで耳につくため、半分は伴奏だけにする
-const FORM = [
-  { chords: SECTION_A, melody: MELODY_A },
-  { chords: SECTION_B, melody: MELODY_B },
-  { chords: SECTION_A, melody: [] },
-  { chords: SECTION_B, melody: [] },
-];
-const SECTION_STEPS = SECTION_A.length * STEPS_PER_BAR;
-const LOOP_STEPS = FORM.length * SECTION_STEPS;
-
-const BASS_FLIGHT: Note[] = [[0, 0, 5], [6, 7, 2], [10, 12, 2], [12, 0, 3], [14, 7, 2]];
-const BASS_MENU: Note[] = [[0, 0, 10], [10, 7, 6]];
-const COMP_FLIGHT: [step: number, length: number][] = [[0, 5], [7, 2], [10, 5]];
+const VOLUME: Record<Exclude<MusicMode, 'off'>, number> = { menu: 0.3, flight: 0.38 };
 
 const hz = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
 
@@ -77,14 +13,51 @@ export class Music {
   private dry!: GainNode;
   private reverb!: GainNode;
   private echo!: GainNode;
+  private delay!: DelayNode;
   private epBus!: StereoPannerNode;
   private noise!: AudioBuffer;
   private mode: MusicMode = 'off';
+  private song: Song;
+  private sectionStarts: number[] = [];
+  private loopSteps = 0;
   private step = 0;
   private nextTime = 0;
 
-  constructor(private readonly getContext: () => AudioContext | null) {
+  constructor(
+    private readonly getContext: () => AudioContext | null,
+    songIndex = 0,
+  ) {
+    this.song = SONGS[songIndex] ?? SONGS[0];
+    this.indexSong();
     window.setInterval(() => this.schedule(), 50);
+  }
+
+  private get stepSeconds(): number {
+    return 60 / this.song.bpm / 4;
+  }
+
+  private indexSong(): void {
+    let offset = 0;
+    this.sectionStarts = this.song.form.map((section) => {
+      const start = offset;
+      offset += section.chords.length * this.song.stepsPerBar;
+      return start;
+    });
+    this.loopSteps = offset;
+  }
+
+  public setSong(index: number): void {
+    this.song = SONGS[index] ?? SONGS[0];
+    this.indexSong();
+    if (!this.ctx || this.mode === 'off') return;
+    // 先読みで予約済みの前の曲の音が新しい曲と重ならないよう、いったん絞ってから頭出しする
+    const t = this.ctx.currentTime;
+    this.master.gain.cancelScheduledValues(t);
+    this.master.gain.setValueAtTime(this.master.gain.value, t);
+    this.master.gain.linearRampToValueAtTime(0, t + 0.15);
+    this.master.gain.linearRampToValueAtTime(VOLUME[this.mode], t + 1);
+    this.delay.delayTime.setValueAtTime(this.stepSeconds * 3, t);
+    this.restart(t + LOOKAHEAD);
   }
 
   public setMode(mode: MusicMode): void {
@@ -99,7 +72,7 @@ export class Music {
       this.master.gain.linearRampToValueAtTime(0, t + 1.5);
     } else {
       if (wasOff) this.restart(t);
-      this.master.gain.linearRampToValueAtTime(mode === 'menu' ? 0.3 : 0.38, t + 1.2);
+      this.master.gain.linearRampToValueAtTime(VOLUME[mode], t + 1.2);
     }
   }
 
@@ -126,8 +99,8 @@ export class Music {
     this.reverb.gain.value = 0.45;
     this.reverb.connect(convolver).connect(this.master);
 
-    const delay = ctx.createDelay(2);
-    delay.delayTime.value = STEP * 3;
+    this.delay = ctx.createDelay(2);
+    this.delay.delayTime.value = this.stepSeconds * 3;
     const feedback = ctx.createGain();
     feedback.gain.value = 0.32;
     const damp = ctx.createBiquadFilter();
@@ -135,7 +108,7 @@ export class Music {
     damp.frequency.value = 2200;
     this.echo = ctx.createGain();
     this.echo.gain.value = 0.28;
-    this.echo.connect(delay).connect(damp).connect(feedback).connect(delay);
+    this.echo.connect(this.delay).connect(damp).connect(feedback).connect(this.delay);
     damp.connect(this.master);
     damp.connect(this.reverb);
 
@@ -156,7 +129,7 @@ export class Music {
 
     const t = ctx.currentTime;
     this.restart(t);
-    if (this.mode !== 'off') this.master.gain.linearRampToValueAtTime(this.mode === 'menu' ? 0.3 : 0.38, t + 2);
+    if (this.mode !== 'off') this.master.gain.linearRampToValueAtTime(VOLUME[this.mode], t + 2);
   }
 
   private impulse(ctx: AudioContext, seconds: number): AudioBuffer {
@@ -180,43 +153,58 @@ export class Music {
     // タブが裏に回るとタイマーが間引かれるので、遅れた分は鳴らさずに拍を進めてテンポの位置を保つ
     while (this.nextTime < ctx.currentTime) this.advance();
     while (this.nextTime < ctx.currentTime + LOOKAHEAD) {
-      this.playStep(this.step, this.nextTime + (this.step % 2 === 1 ? SWING : 0));
+      const { swing, swingUnit } = this.song;
+      const offbeat = this.step % (swingUnit * 2) === swingUnit;
+      this.playStep(this.step, this.nextTime + (offbeat ? swing * this.stepSeconds : 0));
       this.advance();
     }
   }
 
   private advance(): void {
-    this.step = (this.step + 1) % LOOP_STEPS;
-    this.nextTime += STEP;
+    this.step = (this.step + 1) % this.loopSteps;
+    this.nextTime += this.stepSeconds;
   }
 
   private playStep(step: number, t: number): void {
-    const section = FORM[Math.floor(step / SECTION_STEPS)];
-    const inSection = step % SECTION_STEPS;
-    const bar = Math.floor(inSection / STEPS_PER_BAR);
-    const beat = inSection % STEPS_PER_BAR;
+    const song = this.song;
+    const sectionIndex = this.sectionStarts.filter((start) => start <= step).length - 1;
+    const section = song.form[sectionIndex];
+    const inSection = step - this.sectionStarts[sectionIndex];
+    const bar = Math.floor(inSection / song.stepsPerBar);
+    const beat = inSection % song.stepsPerBar;
     const { bass, voicing } = section.chords[bar];
     const flight = this.mode === 'flight';
-    const barLength = STEP * STEPS_PER_BAR;
+    const unit = this.stepSeconds;
+    const barLength = unit * song.stepsPerBar;
+    const comp = song.comp.voice === 'pluck' ? this.pluck.bind(this) : this.ep.bind(this);
+    const roll = (at: number, octave: number, length: number, velocity: number) =>
+      voicing.forEach((midi, i) => comp(at + i * unit * 1.5, midi + octave, length, velocity));
 
     if (beat === 0) {
       this.pad(t, voicing, barLength);
-      if (!flight) voicing.forEach((midi, i) => this.ep(t + i * STEP * 1.5, midi + 12, barLength, 0.5));
+      if (!flight) roll(t, 12, barLength, 0.5);
     }
-    for (const [at, interval, length] of flight ? BASS_FLIGHT : BASS_MENU) {
-      if (at === beat) this.bass(t, bass + interval, length * STEP);
+    for (const [at, interval, length] of flight ? song.bass.flight : song.bass.menu) {
+      if (at === beat) this.bass(t, bass + interval, length * unit);
     }
     if (!flight) return;
 
-    for (const [at, length] of COMP_FLIGHT) {
-      if (at === beat) voicing.forEach((midi) => this.ep(t, midi, length * STEP, at === 0 ? 0.8 : 0.6));
+    for (const [at, length] of song.comp.flight) {
+      if (at !== beat) continue;
+      const velocity = at === 0 ? 0.8 : 0.6;
+      if (song.comp.roll) roll(t, 0, length * unit, velocity);
+      else voicing.forEach((midi) => comp(t, midi, length * unit, velocity));
     }
     for (const [at, midi, length] of section.melody) {
-      if (at === inSection) this.lead(t, midi, length * STEP);
+      if (at !== inSection) continue;
+      if (song.lead === 'vibes') this.vibes(t, midi, length * unit);
+      else this.lead(t, midi, length * unit);
     }
-    if (beat === 0 || beat === 10) this.kick(t);
-    if (beat === 4 || beat === 12) this.rim(t);
-    if (beat % 2 === 0) this.hat(t, beat % 4 === 2 ? 0.7 : 0.4);
+    if (song.drums.kick.includes(beat)) this.kick(t);
+    if (song.drums.rim.includes(beat)) this.rim(t);
+    for (const [at, velocity] of song.drums.hat) {
+      if (at === beat) this.hat(t, velocity);
+    }
   }
 
   private envelope(t: number, peak: number, attack: number, hold: number, release: number, out: AudioNode): GainNode {
@@ -250,6 +238,33 @@ export class Music {
     index.gain.exponentialRampToValueAtTime(f * 0.15, t + 0.8);
     modulator.connect(index).connect(carrier.frequency);
     carrier.connect(this.envelope(t, 0.045 * velocity, 0.004, length, 1, this.epBus));
+  }
+
+  // ナイロンギター: 倍音の多いのこぎり波を、弦をはじいた直後だけ明るく開いたフィルターで素早く丸める
+  private pluck(t: number, midi: number, length: number, velocity: number): void {
+    const ctx = this.ctx!;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 2;
+    filter.frequency.setValueAtTime(3200, t);
+    filter.frequency.exponentialRampToValueAtTime(500, t + 0.25);
+    filter.connect(this.envelope(t, 0.05 * velocity, 0.003, Math.min(length, 0.6), 0.8, this.epBus));
+    this.osc('sawtooth', hz(midi), t, t + length + 1).connect(filter);
+  }
+
+  private vibes(t: number, midi: number, length: number): void {
+    const ctx = this.ctx!;
+    const f = hz(midi);
+    const end = t + length + 2;
+    const carrier = this.osc('sine', f, t, end);
+    const modulator = this.osc('sine', f * 4, t, end);
+    const index = ctx.createGain();
+    index.gain.setValueAtTime(f * 1.2, t);
+    index.gain.exponentialRampToValueAtTime(f * 0.01, t + 0.3);
+    modulator.connect(index).connect(carrier.frequency);
+    const out = this.envelope(t, 0.07, 0.004, length, 1.5, this.epBus);
+    out.connect(this.echo);
+    carrier.connect(out);
   }
 
   private pad(t: number, voicing: number[], length: number): void {

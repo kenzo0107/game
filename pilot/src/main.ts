@@ -7,6 +7,7 @@ import { Explosion } from './explosion';
 import { Terrain } from './terrain';
 import { Rings } from './rings';
 import { Music } from './music';
+import { SONGS } from './songs';
 import { Sound } from './sound';
 import { STAGES } from './stages';
 
@@ -43,6 +44,26 @@ const saveProgress = (progress: Progress): void => {
   }
 };
 
+const SONG_KEY = 'pilot.song';
+
+const loadSongIndex = (): number => {
+  try {
+    const saved = Number(localStorage.getItem(SONG_KEY));
+    if (Number.isInteger(saved) && saved >= 0 && saved < SONGS.length) return saved;
+  } catch {
+    // 保存できない環境でも最初の曲で遊べるようにする
+  }
+  return 0;
+};
+
+const saveSongIndex = (index: number): void => {
+  try {
+    localStorage.setItem(SONG_KEY, String(index));
+  } catch {
+    // 保存できない環境でも例外で止めず、その回の選曲は続けさせる
+  }
+};
+
 const LOW_ALTITUDE = 12;
 const LOW_ALTITUDE_ALERT_INTERVAL = 0.9;
 
@@ -55,7 +76,8 @@ class Game {
   private timer = new THREE.Timer();
   private input = new InputController();
   private sound = new Sound();
-  private music = new Music(() => this.sound.existingContext());
+  private songIndex = loadSongIndex();
+  private music = new Music(() => this.sound.existingContext(), this.songIndex);
   private overlay = document.getElementById('overlay') as HTMLElement;
   private banner = document.getElementById('banner') as HTMLElement;
   private lowAltitudeWarning = document.getElementById('low-altitude') as HTMLElement;
@@ -148,7 +170,7 @@ class Game {
     this.phase = 'menu';
     this.music.setMode('menu');
     this.banner.classList.remove('show');
-    const buttons = STAGES.map((stage, i) => {
+    const buttons: OverlayButton[] = STAGES.map((stage, i) => {
       const locked = i + 1 > this.progress.unlocked;
       const stars = this.progress.stars[i] ?? 0;
       return {
@@ -157,9 +179,20 @@ class Game {
         disabled: locked,
       };
     });
+    buttons.push({
+      label: `♪ BGM: ${SONGS[this.songIndex].title}（${this.songIndex + 1}/${SONGS.length}）`,
+      onSelect: () => this.nextSong(),
+    });
     this.showOverlay('menu', 'PILOT', ['リングをくぐって、滑走路に着陸しよう', 'Enter で最新のステージから'], buttons);
     const latest = Math.min(this.progress.unlocked, STAGES.length) - 1;
     this.primaryAction = () => this.startStage(latest);
+  }
+
+  private nextSong(): void {
+    this.songIndex = (this.songIndex + 1) % SONGS.length;
+    saveSongIndex(this.songIndex);
+    this.music.setSong(this.songIndex);
+    this.showMenu();
   }
 
   private onCrash(): void {
