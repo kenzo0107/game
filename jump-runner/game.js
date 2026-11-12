@@ -2,7 +2,8 @@
 const canvas = document.getElementById('gameCanvas');
 const screenCtx = canvas.getContext('2d');
 // 処理落ちの追いつき分の進行では描画を捨てる。更新と描画が絡み合ったコードを分離する大改修を避けるため、描画先を差し替える
-const nullCtx = new Proxy({}, { get: () => () => {}, set: () => true });
+// メソッドが undefined を返すと createLinearGradient().addColorStop() のような呼び出しで例外になるため、自身を返す
+const nullCtx = new Proxy({}, { get: () => () => nullCtx, set: () => true });
 let ctx = screenCtx;
 
 const WORLD_HEIGHT = 400;
