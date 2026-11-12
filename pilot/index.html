@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Pilot Wings Game</title>
+  <title>パイロット</title>
   <style>
     * {
       margin: 0;
@@ -119,6 +119,108 @@
     #buttons button.pressed {
       background: rgba(255, 255, 255, 0.5);
     }
+    #overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(560px, 92vw);
+      max-height: 92dvh;
+      overflow-y: auto;
+      color: white;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px 24px;
+      border-radius: 12px;
+      text-align: center;
+      z-index: 10;
+    }
+    #overlay[hidden] {
+      display: none;
+    }
+    #overlay.clear {
+      background: rgba(0, 110, 40, 0.85);
+    }
+    #overlay h1 {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+    #overlay p {
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+    #overlay p:first-of-type {
+      color: #ffdd55;
+    }
+    #overlay .choices {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    #overlay button {
+      font: inherit;
+      font-size: 16px;
+      font-weight: bold;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.12);
+      color: white;
+      cursor: pointer;
+    }
+    #overlay button:first-child:not(:disabled) {
+      background: #ff7700;
+      border-color: #ffbb66;
+    }
+    #overlay.menu button:first-child:not(:disabled) {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.7);
+    }
+    #overlay button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    #banner {
+      position: absolute;
+      top: 18%;
+      left: 50%;
+      transform: translate(-50%, -20px);
+      display: grid;
+      gap: 6px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      color: white;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s, transform 0.4s;
+    }
+    #banner.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    #banner strong {
+      font-size: 24px;
+      color: #ffdd55;
+    }
+    @media (pointer: coarse) {
+      #overlay h1 {
+        font-size: 26px;
+      }
+      #overlay p,
+      #overlay button {
+        font-size: 14px;
+      }
+      #overlay button {
+        padding: 8px 10px;
+      }
+      #banner strong {
+        font-size: 18px;
+      }
+      #banner span {
+        font-size: 13px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -128,12 +230,16 @@
     <div style="font-weight: bold; margin-bottom: 5px;">操作方法:</div>
     <div>W/S: 速度増減</div>
     <div>↑/↓: ピッチ（上昇/下降）</div>
-    <div>←/→: ロール（左右旋回）</div>
+    <div>←/→: ロール（かたむけて左右旋回）</div>
     <div>Q/E: ヨー（機首左右）</div>
     <div>着陸後: S でブレーキ、Q/E でハンドル</div>
+    <div>Enter: 決定 / R: やり直し</div>
   </div>
   <div id="hud">
     <div style="font-weight: bold; margin-bottom: 5px;">飛行データ:</div>
+    <div>ステージ: <span id="stage">1</span></div>
+    <div>リング: <span id="rings">0</span></div>
+    <div>風: <span id="wind">なし</span></div>
     <div>燃料: <span id="fuel">100</span>%</div>
     <div>速度: <span id="speed">0</span></div>
     <div>スロットル: <span id="throttle">0</span>%</div>
@@ -150,6 +256,8 @@
       <button type="button" data-action="yawRight">機首→</button>
     </div>
   </div>
+  <div id="banner" aria-live="polite"></div>
+  <div id="overlay" hidden></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

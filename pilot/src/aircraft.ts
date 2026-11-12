@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { InputState } from './input';
+import { GROUND_LEVEL, RUNWAY_SURFACE, Surface, Terrain } from './terrain';
+import { Placement } from './stages';
 
 type FlightState = 'flying' | 'rolling' | 'stopped' | 'crashed';
 
@@ -13,15 +15,14 @@ export class Aircraft {
   private propellerSpin: number;
   private state: FlightState;
   private fuel: number;
-  private readonly GROUND_LEVEL = -50;  // 地面・海面の高さ
-  private readonly RUNWAY_SURFACE = -49.5;  // 滑走路の表面高さ
-  private readonly AIRCRAFT_BOTTOM_OFFSET = 0.25;  // 機体中心から最下点までの距離(主翼底面)
-  private readonly RUNWAY_LEVEL = -49.25; // 滑走路の上(機体の底面が-49.5の滑走路表面に接する)
-  private readonly CRASH_LEVEL = -49.75;  // 墜落時の高さ(機体の底面が-50の地面に接する)
-  private readonly OCEAN_SURFACE = -51;
-  private readonly ISLAND_HALF_WIDTH = 150;
-  private readonly ISLAND_MIN_Z = 100;
-  private readonly ISLAND_MAX_Z = 500;
+  private terrain: Terrain;
+  private wind: THREE.Vector3;
+  private wheels: THREE.Object3D[] = [];
+  private airborne = true;
+  private onTouchdown: (strength: number) => void;
+  private readonly WHEEL_RADIUS = 0.3;
+  private readonly WHEEL_CENTER_Y = -0.6;
+  private readonly AIRCRAFT_BOTTOM_OFFSET = 0.9;  // 機体中心からタイヤの接地点までの距離
   private readonly SHADOW_MAX_HEIGHT = 100;
   private readonly SHADOW_LIFT = 0.12;
   private readonly RUNWAY_ROLLING_DECEL = 1.5;
@@ -29,33 +30,42 @@ export class Aircraft {
   private readonly BRAKE_DECEL = 4;
   private readonly GROUND_STEER_SPEED = 0.5;
   private readonly LEVEL_OUT_RATE = 3;
-  private readonly RUNWAY_MIN_Z = 200;
-  private readonly RUNWAY_MAX_Z = 400;
-  private readonly RUNWAY_MIN_X = -15;
-  private readonly RUNWAY_MAX_X = 15;
 
   // 飛行パラメータ
   private readonly MAX_SPEED = 50;
   private readonly MIN_SPEED = 10;
   private readonly ACCELERATION = 5;
   private readonly PITCH_SPEED = 0.15;  // 上下の動きを遅く
-  private readonly ROLL_SPEED = 0.2;    // 左右の傾きを遅く
+  private readonly ROLL_SPEED = 0.6;
   private readonly YAW_SPEED = 0.12;    // 旋回を遅く
+  private readonly BANK_TURN_RATE = 0.6;
+  private readonly ROLL_RECOVERY_RATE = 0.6;
   private readonly LIFT_COEFFICIENT = 0.25;  // 揚力をさらに弱く（降下しやすく）
   private readonly DRAG_COEFFICIENT = 0.1;
   private readonly GRAVITY = 6.0;  // 重力を弱く（ゆっくり降下）
 
   // 燃料パラメータ
-  private readonly MAX_FUEL = 100;
-  private readonly FUEL_CONSUMPTION_RATE = 1.5;  // 毎秒の消費率(%、約66秒で空)
+  private readonly FUEL_CONSUMPTION_RATE = 1.2;  // 毎秒の消費率(%、約83秒で空)
   private readonly SAFE_LANDING_SPEED = 12;
   private readonly SAFE_LANDING_PITCH = Math.PI / 12; // 15度
   private readonly SAFE_LANDING_ROLL = Math.PI / 12;  // 15度
   private readonly CRASH_SPEED_THRESHOLD = 20;
   private readonly CRASH_ANGLE_THRESHOLD = Math.PI / 6; // 30度
 
-  constructor(scene: THREE.Scene) {
+  constructor(
+    scene: THREE.Scene,
+    terrain: Terrain,
+    start: Placement,
+    fuel: number,
+    wind: { x: number; z: number },
+    onTouchdown: (strength: number) => void,
+  ) {
+    this.terrain = terrain;
+    this.wind = new THREE.Vector3(wind.x, 0, wind.z);
+    this.onTouchdown = onTouchdown;
     this.mesh = this.createAircraft();
+    this.mesh.position.set(start.x, start.y, start.z);
+    this.mesh.rotation.y = start.heading;
     this.shadowMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
@@ -64,12 +74,13 @@ export class Aircraft {
       polygonOffsetFactor: -1,
     });
     this.shadow = this.createShadow();
-    this.velocity = new THREE.Vector3(0, -1, this.MIN_SPEED * 1.2);  // 初期速度をやや速く、やや下向きに
+    this.velocity = new THREE.Vector3(0, -1, this.MIN_SPEED * 1.2)  // 初期速度をやや速く、やや下向きに
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), start.heading);
     this.angularVelocity = new THREE.Vector3(0, 0, 0);
     this.throttle = 0.4;  // 初期スロットルを少し下げる
     this.propellerSpin = 0;
     this.state = 'flying';
-    this.fuel = this.MAX_FUEL;
+    this.fuel = fuel;
 
     scene.add(this.mesh);
     scene.add(this.shadow);
@@ -111,34 +122,30 @@ export class Aircraft {
     propeller.name = 'propeller';
     group.add(propeller);
 
-    // タイヤ（車輪）
-    const tireRadius = 0.3;
-    const tireWidth = 0.2;
     const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+    const hubMaterial = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+    const strutMaterial = new THREE.MeshLambertMaterial({ color: 0x888888 });
+    const tireGeometry = new THREE.CylinderGeometry(this.WHEEL_RADIUS, this.WHEEL_RADIUS, 0.22, 16);
+    const hubGeometry = new THREE.BoxGeometry(0.24, this.WHEEL_RADIUS * 1.6, 0.08);
+    const gearPositions: [number, number][] = [[0, 1.5], [-1.2, -0.5], [1.2, -0.5]];
+    for (const [x, z] of gearPositions) {
+      const strutLength = -0.25 - this.WHEEL_CENTER_Y;
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, strutLength, 0.08), strutMaterial);
+      strut.position.set(x, -0.25 - strutLength / 2, z);
+      group.add(strut);
 
-    // 前輪（ノーズギア）
-    const noseTireGeometry = new THREE.CylinderGeometry(tireRadius, tireRadius, tireWidth, 16);
-    const noseTire = new THREE.Mesh(noseTireGeometry, tireMaterial);
-    noseTire.rotation.z = Math.PI / 2; // 横向きに回転
-    noseTire.position.set(0, -0.5, 1.5); // 機首下部
-    group.add(noseTire);
+      const wheel = new THREE.Group();
+      wheel.position.set(x, this.WHEEL_CENTER_Y, z);
+      const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+      tire.rotation.z = Math.PI / 2;
+      wheel.add(tire);
+      wheel.add(new THREE.Mesh(hubGeometry, hubMaterial));
+      group.add(wheel);
+      this.wheels.push(wheel);
+    }
 
-    // 主輪（メインギア）左
-    const leftTireGeometry = new THREE.CylinderGeometry(tireRadius, tireRadius, tireWidth, 16);
-    const leftTire = new THREE.Mesh(leftTireGeometry, tireMaterial);
-    leftTire.rotation.z = Math.PI / 2;
-    leftTire.position.set(-1.2, -0.5, -0.5); // 左側、主翼の下
-    group.add(leftTire);
-
-    // 主輪（メインギア）右
-    const rightTireGeometry = new THREE.CylinderGeometry(tireRadius, tireRadius, tireWidth, 16);
-    const rightTire = new THREE.Mesh(rightTireGeometry, tireMaterial);
-    rightTire.rotation.z = Math.PI / 2;
-    rightTire.position.set(1.2, -0.5, -0.5); // 右側、主翼の下
-    group.add(rightTire);
-
-    // 初期位置：滑走路手前の上空からスタート
-    group.position.set(0, 10, -600);  // 高度60、滑走路から800単位手前
+    // 既定の XYZ 順だと機首が横を向いたときにピッチ操作が機首の上下ではなく横転になるため、機体の姿勢として自然な順にする
+    group.rotation.order = 'YXZ';
     group.rotation.x = -0.05;  // わずかに機首を下げる
 
     return group;
@@ -160,37 +167,33 @@ export class Aircraft {
     return group;
   }
 
+  private surface(): Surface {
+    return this.terrain.surfaceAt(this.mesh.position.x, this.mesh.position.z);
+  }
+
   private isOverRunway(): boolean {
-    const { x, z } = this.mesh.position;
-    return z >= this.RUNWAY_MIN_Z && z <= this.RUNWAY_MAX_Z &&
-           x >= this.RUNWAY_MIN_X && x <= this.RUNWAY_MAX_X;
+    return this.surface() === 'runway';
   }
 
-  private isOverIsland(): boolean {
-    const { x, z } = this.mesh.position;
-    return Math.abs(x) <= this.ISLAND_HALF_WIDTH && z >= this.ISLAND_MIN_Z && z <= this.ISLAND_MAX_Z;
-  }
-
-  private visibleSurfaceLevel(): number {
-    if (this.isOverRunway()) return this.RUNWAY_SURFACE;
-    if (this.isOverIsland()) return this.GROUND_LEVEL;
-    return this.OCEAN_SURFACE;
+  private spinWheels(distance: number): void {
+    for (const wheel of this.wheels) wheel.rotation.x += distance / this.WHEEL_RADIUS;
   }
 
   private updateRollout(delta: number, input: InputState): void {
-    if (!this.isOverIsland()) {
+    const surface = this.surface();
+    if (surface === 'ocean') {
       this.state = 'crashed';
       return;
     }
 
-    const onRunway = this.isOverRunway();
+    const onRunway = surface === 'runway';
     const speed = Math.hypot(this.velocity.x, this.velocity.z);
     const decel = (onRunway ? this.RUNWAY_ROLLING_DECEL : this.GRASS_ROLLING_DECEL) +
                   (input.throttleDown ? this.BRAKE_DECEL : 0);
     const nextSpeed = Math.max(0, speed - decel * delta);
 
     const steerAuthority = Math.min(1, speed / 5);
-    this.mesh.rotation.y += input.yaw * this.GROUND_STEER_SPEED * steerAuthority * delta;
+    this.mesh.rotation.y -= input.yaw * this.GROUND_STEER_SPEED * steerAuthority * delta;
     const levelOut = Math.exp(-this.LEVEL_OUT_RATE * delta);
     this.mesh.rotation.x *= levelOut;
     this.mesh.rotation.z *= levelOut;
@@ -199,7 +202,8 @@ export class Aircraft {
     this.velocity.set(Math.sin(heading) * nextSpeed, 0, Math.cos(heading) * nextSpeed);
     this.mesh.position.x += this.velocity.x * delta;
     this.mesh.position.z += this.velocity.z * delta;
-    this.mesh.position.y = (onRunway ? this.RUNWAY_SURFACE : this.GROUND_LEVEL) + this.AIRCRAFT_BOTTOM_OFFSET;
+    this.mesh.position.y = (onRunway ? RUNWAY_SURFACE : GROUND_LEVEL) + this.AIRCRAFT_BOTTOM_OFFSET;
+    this.spinWheels(nextSpeed * delta);
 
     this.propellerSpin *= Math.exp(-0.8 * delta);
     this.spinPropeller(delta);
@@ -228,7 +232,7 @@ export class Aircraft {
 
     const forward = new THREE.Vector3(0, 0, 1).applyEuler(this.mesh.rotation);
     this.shadow.rotation.y = Math.atan2(forward.x, forward.z);
-    this.shadow.position.set(this.mesh.position.x, this.visibleSurfaceLevel() + this.SHADOW_LIFT, this.mesh.position.z);
+    this.shadow.position.set(this.mesh.position.x, this.terrain.levelAt(this.mesh.position.x, this.mesh.position.z) + this.SHADOW_LIFT, this.mesh.position.z);
 
     const closeness = 1 - Math.max(0, altitude) / this.SHADOW_MAX_HEIGHT;
     const blurSpread = 1 + (1 - closeness) * 0.3;
@@ -288,10 +292,13 @@ export class Aircraft {
     this.angularVelocity.y = yawInput * this.YAW_SPEED;
     this.angularVelocity.z = rollInput * this.ROLL_SPEED;
 
-    // 回転適用
+    // 回転適用（画面奥を向く機体では +X が画面の左なので、右への旋回は Y 回転を減らす向き）
     this.mesh.rotation.x += this.angularVelocity.x * delta;
-    this.mesh.rotation.y += this.angularVelocity.y * delta;
+    this.mesh.rotation.y -= (this.angularVelocity.y + Math.sin(this.mesh.rotation.z) * this.BANK_TURN_RATE) * delta;
     this.mesh.rotation.z += this.angularVelocity.z * delta;
+    if (rollInput === 0) {
+      this.mesh.rotation.z *= Math.exp(-this.ROLL_RECOVERY_RATE * delta);
+    }
 
     // ロール角を制限（-60度〜60度）
     this.mesh.rotation.z = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, this.mesh.rotation.z));
@@ -324,7 +331,7 @@ export class Aircraft {
     this.velocity.multiplyScalar(1 - this.DRAG_COEFFICIENT * delta);
 
     // 位置更新
-    this.mesh.position.add(this.velocity.clone().multiplyScalar(delta));
+    this.mesh.position.addScaledVector(this.velocity, delta).addScaledVector(this.wind, delta);
 
     // 地面・海面との衝突判定（機体の底面が地面より下になったら）
     const aircraftBottom = this.mesh.position.y - this.AIRCRAFT_BOTTOM_OFFSET;
@@ -333,7 +340,7 @@ export class Aircraft {
     const isOnRunway = this.isOverRunway();
 
     // 滑走路上では滑走路表面、それ以外では地面を基準に
-    const surfaceLevel = isOnRunway ? this.RUNWAY_SURFACE : this.GROUND_LEVEL;
+    const surfaceLevel = isOnRunway ? RUNWAY_SURFACE : GROUND_LEVEL;
 
     if (aircraftBottom <= surfaceLevel) {
       const speed = this.velocity.length();
@@ -342,13 +349,17 @@ export class Aircraft {
 
       if (!isOnRunway) {
         // 海や陸地（滑走路外）に墜落
-        this.mesh.position.y = this.CRASH_LEVEL;
+        this.mesh.position.y = GROUND_LEVEL + this.AIRCRAFT_BOTTOM_OFFSET;
         this.state = 'crashed';
         return;
       }
 
       // 滑走路上に着陸
-      this.mesh.position.y = this.RUNWAY_LEVEL;
+      this.mesh.position.y = RUNWAY_SURFACE + this.AIRCRAFT_BOTTOM_OFFSET;
+      if (this.airborne) {
+        this.onTouchdown(Math.min(1, 0.3 + Math.abs(this.velocity.y) / 4 + speed / 40));
+      }
+      this.airborne = false;
 
       // 滑走路上での着陸判定
       const isSafeLanding = speed < this.SAFE_LANDING_SPEED &&
@@ -372,7 +383,6 @@ export class Aircraft {
           return;
         } else {
           // 中程度の衝突：バウンド
-          this.mesh.position.y = this.RUNWAY_LEVEL;
           this.velocity.y = -this.velocity.y * 0.3;
           this.velocity.x *= 0.7;
           this.velocity.z *= 0.7;
@@ -385,18 +395,12 @@ export class Aircraft {
     this.spinPropeller(delta);
 
     // 安全チェック: 機体が地面や滑走路より下にならないようにする
-    if (isOnRunway) {
-      // 滑走路エリア内の場合、滑走路レベル以上を保証
-      if (this.mesh.position.y < this.RUNWAY_LEVEL) {
-        this.mesh.position.y = this.RUNWAY_LEVEL;
-      }
-    } else {
-      // 滑走路外の場合、地面レベル以上を保証
-      const minHeight = this.GROUND_LEVEL + this.AIRCRAFT_BOTTOM_OFFSET;
-      if (this.mesh.position.y < minHeight) {
-        this.mesh.position.y = minHeight;
-      }
+    const minHeight = surfaceLevel + this.AIRCRAFT_BOTTOM_OFFSET;
+    if (this.mesh.position.y < minHeight) {
+      this.mesh.position.y = minHeight;
     }
+    // 接地の判定だけで鳴らすと、滑走路上で小さく跳ねるたびに毎フレーム音が重なるため、一度浮き上がってからの接地だけを数える
+    if (this.mesh.position.y > minHeight + 0.3) this.airborne = true;
 
     // 影の更新
     this.updateShadow();
@@ -446,11 +450,20 @@ export class Aircraft {
 
     if (isOnRunway) {
       // 滑走路エリア内では、滑走路表面からの高度を返す
-      return aircraftBottom - this.RUNWAY_SURFACE;
+      return aircraftBottom - RUNWAY_SURFACE;
     } else {
       // 滑走路エリア外では、地面からの高度を返す
-      return aircraftBottom - this.GROUND_LEVEL;
+      return aircraftBottom - GROUND_LEVEL;
     }
+  }
+
+  public getGroundContact(): { speed: number; surface: Surface } | null {
+    if (this.state !== 'rolling') return null;
+    return { speed: Math.hypot(this.velocity.x, this.velocity.z), surface: this.surface() };
+  }
+
+  public isStoppedOnRunway(): boolean {
+    return this.state === 'stopped' && this.isOverRunway();
   }
 
   public destroy(scene: THREE.Scene): void {
