@@ -18,24 +18,11 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* iOS Safari の 100vh はツールバーの裏まで含む高さになり、横持ちで地面が隠れるため、表示領域に合わせる inset と dvh を使う */
+/* iOS Safari の 100vh はツールバーの裏まで含む高さになり、横持ちで地面が隠れるため、表示領域に合わせる inset を使う */
 #stage {
     position: fixed;
     inset: 0;
     overflow: hidden;
-}
-
-/* iOS Safari は画面の向きを固定できないため、縦持ちのときは画面ごと 90 度回して横向きで表示する */
-@media (orientation: portrait) and (pointer: coarse) {
-    #stage {
-        inset: auto;
-        top: 0;
-        left: 0;
-        width: 100dvh;
-        height: 100dvw;
-        transform-origin: top left;
-        transform: rotate(90deg) translateY(-100%);
-    }
 }
 
 #gameCanvas {

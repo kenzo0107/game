@@ -1,3 +1,4 @@
+import '../../shared/landscape.js';
 import * as THREE from 'three';
 import { Aircraft } from './aircraft';
 import { InputController } from './input';

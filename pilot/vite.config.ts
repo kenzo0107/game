@@ -6,6 +6,11 @@ const sharedThree = process.env.ARCADE_SHARED_THREE === '1'
 
 export default defineConfig({
   base: './',
+  server: {
+    fs: {
+      allow: ['..'],
+    },
+  },
   build: {
     rolldownOptions: {
       external: sharedThree ? ['three'] : [],

@@ -1,7 +1,6 @@
 // キャンバス設定
 const canvas = document.getElementById('gameCanvas');
 const stage = document.getElementById('stage');
-const isStageRotated = () => getComputedStyle(stage).transform !== 'none';
 const screenCtx = canvas.getContext('2d');
 // 処理落ちの追いつき分の進行では描画を捨てる。更新と描画が絡み合ったコードを分離する大改修を避けるため、描画先を差し替える
 // メソッドが undefined を返すと createLinearGradient().addColorStop() のような呼び出しで例外になるため、自身を返す
@@ -3106,7 +3105,7 @@ function drawTitle() {
     ]);
 }
 
-// Android の Chrome は全画面中でないと向きを固定できない。iOS の Safari は固定できないため、CSS で画面を回して横向きにする
+// Android の Chrome は全画面中でないと向きを固定できない。iOS の Safari は固定できないため、shared/landscape.js で画面を回して横向きにする
 function lockLandscape() {
     if (!matchMedia('(pointer: coarse)').matches || !screen.orientation?.lock) return;
     const lock = () => screen.orientation.lock('landscape').catch(() => {});
@@ -3156,20 +3155,15 @@ function handleSlide() {
 const SWIPE_DOWN_PX = 30;
 let swipeStartY = null;
 
-// 画面を 90 度回しているときは、ゲーム内の下方向が画面の左方向になる
-function downwardPosition(e) {
-    return isStageRotated() ? -e.clientX : e.clientY;
-}
-
 document.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.back')) return;
     e.preventDefault();
-    swipeStartY = downwardPosition(e);
+    swipeStartY = e.clientY;
     handleTap();
 });
 
 document.addEventListener('pointermove', (e) => {
-    if (swipeStartY === null || downwardPosition(e) - swipeStartY < SWIPE_DOWN_PX) return;
+    if (swipeStartY === null || e.clientY - swipeStartY < SWIPE_DOWN_PX) return;
     swipeStartY = null;
     handleSlide();
 });

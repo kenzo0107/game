@@ -7,11 +7,12 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; background: #111; font-family: 'Arial', sans-serif; }
+    body { container-type: size; }
     canvas { display: block; touch-action: none; }
     .hud { position: absolute; pointer-events: none; color: #fff; }
     #scoreboard {
       top: 8px; left: 50%; transform: translateX(-50%); display: flex;
-      background: rgba(0, 0, 0, 0.6); border-radius: 6px; padding: 4px; max-width: calc(100vw - 16px);
+      background: rgba(0, 0, 0, 0.6); border-radius: 6px; padding: 4px; max-width: calc(100% - 16px);
     }
     .frame { border: 1px solid #666; min-width: 34px; text-align: center; }
     .frame.current { border-color: #ffd54a; }
@@ -20,7 +21,7 @@
     .frame .total { font-size: 13px; font-weight: bold; min-height: 16px; }
     #status {
       top: 72px; left: 12px; font-size: 14px; background: rgba(0, 0, 0, 0.5);
-      padding: 6px 10px; border-radius: 6px; max-width: calc(100vw - 24px);
+      padding: 6px 10px; border-radius: 6px; max-width: calc(100% - 24px);
     }
     #points {
       top: 108px; left: 12px; font-size: 16px; font-weight: bold; color: #ffd54a;
@@ -54,7 +55,7 @@
       width: 40px; height: 40px; border-radius: 50%; background: rgba(0, 0, 0, 0.55);
       color: #fff; font-size: 20px; text-decoration: none;
     }
-    @media (max-width: 480px) {
+    @container (max-width: 480px) {
       #scoreboard { left: 56px; right: 8px; transform: none; max-width: none; }
       .frame { flex: 1; min-width: 0; }
       .frame .marks { gap: 1px; }
