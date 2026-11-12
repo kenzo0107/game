@@ -43,6 +43,9 @@ const saveProgress = (progress: Progress): void => {
   }
 };
 
+const LOW_ALTITUDE = 12;
+const LOW_ALTITUDE_ALERT_INTERVAL = 0.9;
+
 const starText = (count: number): string => '★'.repeat(count) + '☆'.repeat(3 - count);
 
 class Game {
@@ -55,6 +58,8 @@ class Game {
   private music = new Music(() => this.sound.existingContext());
   private overlay = document.getElementById('overlay') as HTMLElement;
   private banner = document.getElementById('banner') as HTMLElement;
+  private lowAltitudeWarning = document.getElementById('low-altitude') as HTMLElement;
+  private lowAltitudeAlertTimer = 0;
   private progress = loadProgress();
   private phase: Phase = 'menu';
   private stageIndex = 0;
@@ -240,6 +245,25 @@ class Game {
     this.setText('fuel', fuel.toFixed(1), fuel <= 0 ? '#ff0000' : fuel < 20 ? '#ff6600' : '#ffff00');
   }
 
+  private updateLowAltitudeWarning(delta: number): void {
+    const position = this.aircraft.getPosition();
+    const tooLow =
+      this.phase === 'playing' &&
+      this.aircraft.isFlying() &&
+      this.aircraft.getAltitude() < LOW_ALTITUDE &&
+      !this.terrain.isOnApproach(position.x, position.z);
+    this.lowAltitudeWarning.hidden = !tooLow;
+    if (!tooLow) {
+      this.lowAltitudeAlertTimer = 0;
+      return;
+    }
+    this.lowAltitudeAlertTimer -= delta;
+    if (this.lowAltitudeAlertTimer <= 0) {
+      this.sound.lowAltitude();
+      this.lowAltitudeAlertTimer = LOW_ALTITUDE_ALERT_INTERVAL;
+    }
+  }
+
   private animate = (timestamp?: number): void => {
     requestAnimationFrame(this.animate);
     this.timer.update(timestamp);
@@ -266,6 +290,7 @@ class Game {
       if (this.bannerTimer <= 0) this.banner.classList.remove('show');
     }
 
+    this.updateLowAltitudeWarning(delta);
     this.explosion?.update(delta);
     this.updateHUD();
     this.renderer.render(this.scene, this.camera);

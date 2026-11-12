@@ -16,6 +16,7 @@ export class Rings {
   private geometry = new THREE.TorusGeometry(RING_RADIUS, 0.7, 10, 40);
   private idleMaterial = new THREE.MeshLambertMaterial({ color: 0xffcc00, emissive: 0x664400 });
   private nextMaterial = new THREE.MeshLambertMaterial({ color: 0xff7700, emissive: 0xaa3300 });
+  private passedMaterial = new THREE.MeshLambertMaterial({ color: 0x33dd88, emissive: 0x116633 });
 
   constructor(scene: THREE.Scene, placements: Placement[]) {
     this.rings = placements.map((p) => {
@@ -37,7 +38,7 @@ export class Rings {
   private highlightNext(): void {
     const next = this.rings.find((r) => !r.passed);
     for (const ring of this.rings) {
-      ring.mesh.material = ring === next ? this.nextMaterial : this.idleMaterial;
+      ring.mesh.material = ring.passed ? this.passedMaterial : ring === next ? this.nextMaterial : this.idleMaterial;
     }
   }
 
@@ -51,7 +52,6 @@ export class Rings {
       const lateral = offset.addScaledVector(ring.normal, -side).length();
       if (ring.prevSide !== null && ring.prevSide < 0 && side >= 0 && lateral < RING_RADIUS) {
         ring.passed = true;
-        ring.mesh.visible = false;
         newlyPassed++;
       }
       ring.prevSide = side;
@@ -73,5 +73,6 @@ export class Rings {
     this.geometry.dispose();
     this.idleMaterial.dispose();
     this.nextMaterial.dispose();
+    this.passedMaterial.dispose();
   }
 }

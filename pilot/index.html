@@ -203,6 +203,30 @@
       font-size: 24px;
       color: #ffdd55;
     }
+    #low-altitude {
+      position: absolute;
+      top: 32%;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 18px;
+      border-radius: 10px;
+      border: 2px solid #ff5544;
+      color: #ffffff;
+      font-size: 20px;
+      font-weight: bold;
+      white-space: nowrap;
+      background: rgba(180, 20, 10, 0.7);
+      pointer-events: none;
+      animation: low-altitude-blink 0.9s steps(2, jump-none) infinite;
+    }
+    #low-altitude[hidden] {
+      display: none;
+    }
+    @keyframes low-altitude-blink {
+      50% {
+        opacity: 0.35;
+      }
+    }
     @media (pointer: coarse) {
       #overlay h1 {
         font-size: 26px;
@@ -219,6 +243,9 @@
       }
       #banner span {
         font-size: 13px;
+      }
+      #low-altitude {
+        font-size: 15px;
       }
     }
   </style>
@@ -257,6 +284,7 @@
     </div>
   </div>
   <div id="banner" aria-live="polite"></div>
+  <div id="low-altitude" role="alert" hidden>⚠ 高度が低すぎる！ 機首を上げよう</div>
   <div id="overlay" hidden></div>
   <script type="module" src="/src/main.ts"></script>
 </body>

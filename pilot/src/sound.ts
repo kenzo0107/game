@@ -141,6 +141,10 @@ export class Sound {
     this.notes([[988, 0, 0.12], [1319, 0.08, 0.3]], 'square', 0.06);
   }
 
+  public lowAltitude(): void {
+    this.notes([[880, 0, 0.18], [660, 0.2, 0.25]], 'sine', 0.12);
+  }
+
   public clear(): void {
     this.notes([[523, 0, 0.15], [659, 0.15, 0.15], [784, 0.3, 0.15], [1047, 0.45, 0.5]]);
   }

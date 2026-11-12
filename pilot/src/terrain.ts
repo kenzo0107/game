@@ -6,6 +6,8 @@ export type Surface = 'runway' | 'grass' | 'ocean';
 export const GROUND_LEVEL = -50;
 export const RUNWAY_SURFACE = -49.5;
 export const OCEAN_SURFACE = -51;
+const APPROACH_LENGTH = 300;
+const APPROACH_SPREAD = 0.3;
 
 export class Terrain {
   private group = new THREE.Group();
@@ -90,6 +92,17 @@ export class Terrain {
     if (Math.abs(along) <= runway.length / 2 && Math.abs(across) <= runway.width / 2) return 'runway';
     if (Math.abs(x - island.x) <= island.width / 2 && Math.abs(z - island.z) <= island.depth / 2) return 'grass';
     return 'ocean';
+  }
+
+  public isOnApproach(x: number, z: number): boolean {
+    const { runway } = this.stage;
+    const dx = x - runway.x;
+    const dz = z - runway.z;
+    const along = dx * Math.sin(runway.heading) + dz * Math.cos(runway.heading);
+    const across = dx * Math.cos(runway.heading) - dz * Math.sin(runway.heading);
+    const beforeThreshold = -runway.length / 2 - along;
+    if (beforeThreshold > APPROACH_LENGTH || along > runway.length / 2) return false;
+    return Math.abs(across) <= runway.width / 2 + 10 + Math.max(0, beforeThreshold) * APPROACH_SPREAD;
   }
 
   public levelAt(x: number, z: number): number {

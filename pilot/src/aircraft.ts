@@ -418,6 +418,10 @@ export class Aircraft {
     return this.state === 'crashed';
   }
 
+  public isFlying(): boolean {
+    return this.state === 'flying';
+  }
+
   public isLanded(): boolean {
     return this.state === 'stopped';
   }
