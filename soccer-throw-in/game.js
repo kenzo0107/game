@@ -1,3 +1,8 @@
+import * as THREE from 'three';
+
+// r128 から上げた際に見た目が変わらないよう、旧来の色管理なし・リニア出力に合わせる。色を作る前に切り替える必要がある
+THREE.ColorManagement.enabled = false;
+
 const stage = document.getElementById('stage');
 const distanceEl = document.getElementById('distance');
 const bestEl = document.getElementById('best');
@@ -90,14 +95,16 @@ function init() {
     camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 500);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     stage.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+    // r155 で光の強さが物理単位になり暗く見えるため、旧来の明るさに合わせて π 倍する
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6 * Math.PI));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.8 * Math.PI);
     sun.position.set(20, 30, 10);
     sun.castShadow = true;
     Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 30, bottom: -30 });

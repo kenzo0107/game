@@ -45,7 +45,8 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="game.js"></script>
+    <!-- アーケード公開時は build.sh が共有版の three に書き換える -->
+    <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js" } }</script>
+    <script type="module" src="game.js"></script>
 </body>
 </html>

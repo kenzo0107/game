@@ -14,9 +14,64 @@ GAMES=(
   "pilot|vite|パイロット|3D フライト|操縦桿を握って大空へ。自由自在に飛び回ろう！"
 )
 
+TOOLS_DIR="tools"
+
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 cp -r thumbnails "$OUT_DIR/thumbnails"
+cp "$TOOLS_DIR/icon.svg" "$OUT_DIR/icon.svg"
+
+(cd "$TOOLS_DIR" && npm ci)
+ESBUILD="$PWD/$TOOLS_DIR/node_modules/.bin/esbuild"
+THREE_VERSION=$(node -p "require('./$TOOLS_DIR/node_modules/three/package.json').version")
+
+THREE_IMPORT_PATTERN="from ?[\"']three[\"']"
+declare -A three_games=()
+three_sources=()
+source_list=$(mktemp)
+trap 'rm -f "$source_list"' EXIT
+for entry in "${GAMES[@]}"; do
+  name=${entry%%|*}
+  find "$name" \( -path "$name/node_modules" -o -path "$name/dist" \) -prune -o -type f \
+    \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.js' -o -name '*.jsx' -o -name '*.mjs' \) -print0 >"$source_list"
+  while IFS= read -r -d '' file; do
+    found=0
+    grep -qE "$THREE_IMPORT_PATTERN" "$file" || found=$?
+    case $found in
+      0) three_sources+=("$file"); three_games[$name]=1 ;;
+      1) ;;
+      *) echo "$file を読めなかった" >&2; exit 1 ;;
+    esac
+  done <"$source_list"
+done
+(( ${#three_sources[@]} > 0 )) || { echo "three を使うゲームが見つからない" >&2; exit 1; }
+node "$TOOLS_DIR/build-three.mjs" "$OUT_DIR/vendor/three.js" "${three_sources[@]}"
+# 共有版はビルドごとに含む名前が変わるため、HTTP キャッシュに残った旧版と新しいゲームが組み合わさらないよう名前を変える
+three_hash=$(node -e "process.stdout.write(require('crypto').createHash('sha256').update(require('fs').readFileSync(process.argv[1])).digest('hex').slice(0, 10))" "$OUT_DIR/vendor/three.js")
+mv "$OUT_DIR/vendor/three.js" "$OUT_DIR/vendor/three.$three_hash.js"
+SHARED_THREE_URL="../vendor/three.$three_hash.js"
+
+check_three_version() {
+  local actual=$1 where=$2
+  [[ $actual == "$THREE_VERSION" ]] || { echo "$where: three $actual が共有版 $THREE_VERSION と一致しない" >&2; exit 1; }
+}
+
+use_shared_three() {
+  local html=$1
+  if grep -q '<script type="importmap">' "$html"; then
+    URL=$SHARED_THREE_URL perl -pi -e 's#"three":\s*"[^"]*"#"three": "$ENV{URL}"#' "$html"
+  else
+    URL=$SHARED_THREE_URL perl -0pi -e 's#<head>#<head>\n  <script type="importmap">{ "imports": { "three": "$ENV{URL}" } }</script>#' "$html"
+  fi
+  grep -q "\"three\": \"$SHARED_THREE_URL\"" "$html" || { echo "$html: import map を設定できなかった" >&2; exit 1; }
+}
+
+minify_assets() {
+  find "$1" -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' \) -print0 |
+    while IFS= read -r -d '' file; do
+      "$ESBUILD" "$file" --minify --charset=utf8 --log-level=warning --allow-overwrite --outfile="$file"
+    done
+}
 
 links=""
 stage=0
@@ -29,17 +84,19 @@ for entry in "${GAMES[@]}"; do
     vite)
       # npm run build の tsc は未使用変数などでも失敗するため、公開用には型チェックを挟まない
       # minify は設定に terser を指定していても未インストールなことがあるため、Vite 8 に同梱される oxc に固定する
-      (cd "$name" && npm ci && npx vite build --base=./ --minify oxc --outDir "../$dest" --emptyOutDir)
+      (cd "$name" && npm ci && ARCADE_SHARED_THREE=1 npx vite build --base=./ --minify oxc --outDir "../$dest" --emptyOutDir)
       ;;
     tsc)
       (cd "$name" && npm ci && npm run build)
       mkdir -p "$dest"
       cp "$name/index.html" "$name"/*.js "$dest/"
+      minify_assets "$dest"
       ;;
     static)
       mkdir -p "$dest"
       cp "$name"/*.html "$dest/"
       find "$name" -maxdepth 1 \( -name '*.js' -o -name '*.css' \) -exec cp {} "$dest/" \;
+      minify_assets "$dest"
       ;;
     *)
       echo "unknown type: $type" >&2
@@ -48,6 +105,21 @@ for entry in "${GAMES[@]}"; do
   esac
 
   [[ -f "$dest/index.html" ]] || { echo "missing $dest/index.html" >&2; exit 1; }
+  # 依存の書き方ではなく出力に three の import が残っているかで判定し、import map の入れ忘れを防ぐ
+  if grep -rqE --include='*.js' "$THREE_IMPORT_PATTERN" "$dest"; then
+    [[ -n ${three_games[$name]:-} ]] || { echo "$name: 出力は three を読むが、共有版を作るときに参照元が見つからなかった" >&2; exit 1; }
+    if [[ -f "$name/node_modules/three/package.json" ]]; then
+      check_three_version "$(node -p "require('./$name/node_modules/three/package.json').version")" "$name"
+    fi
+    if grep -q 'three@' "$dest/index.html"; then
+      check_three_version "$(grep -oE 'three@[0-9.]+' "$dest/index.html" | head -1 | cut -d@ -f2)" "$name/index.html"
+    fi
+    use_shared_three "$dest/index.html"
+  fi
+  # トップを経由せずゲームのページを直接開いた場合でもオフライン対応が有効になるよう、各ページで登録する
+  perl -0pi -e 's#</head>#  <link rel="manifest" href="../manifest.webmanifest" />\n</head>#' "$dest/index.html"
+  perl -0pi -e "s#</body>#  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js', { scope: '../' });</script>\n</body>#" "$dest/index.html"
+  grep -q "serviceWorker" "$dest/index.html" || { echo "$dest/index.html: Service Worker を登録できなかった" >&2; exit 1; }
   [[ -f "thumbnails/$name.svg" ]] || { echo "missing thumbnails/$name.svg" >&2; exit 1; }
   stage=$((stage + 1))
   stage_label=$(printf '%02d' "$stage")
@@ -72,6 +144,9 @@ cat >"$OUT_DIR/index.html" <<EOF
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GAME ARCADE</title>
+    <meta name="theme-color" content="#07051a" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet" />
@@ -423,8 +498,22 @@ $links      </main>
         requestAnimationFrame(draw);
       })();
     </script>
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');</script>
   </body>
 </html>
 EOF
+cat >"$OUT_DIR/manifest.webmanifest" <<'EOF'
+{
+  "name": "GAME ARCADE",
+  "short_name": "ARCADE",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07051a",
+  "theme_color": "#07051a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
+EOF
 touch "$OUT_DIR/.nojekyll"
+node "$TOOLS_DIR/build-sw.mjs" "$OUT_DIR"
 echo "==> built ${#GAMES[@]} games into $OUT_DIR/"
