@@ -126,6 +126,7 @@ class Player {
         if (this.isJumping) {
             this.fastFall = true;
             this.velocityY = Math.max(this.velocityY, 12);
+            comicSfx(this.x - 10, this.y - 10, 'ヒュン!', '#B3E5FC', 13, 22);
         } else if (!this.sliding) {
             this.startSlide();
         }
@@ -135,6 +136,7 @@ class Player {
         this.slideTimer = 40;
         this.stretch(1.25, 0.8);
         landingDust(this.x + this.width / 2, this.feetY);
+        comicSfx(this.x + this.width + 18, this.feetY - 14, 'ズザッ!', '#FFB74D', 13, 24);
         playSlideSound();
     }
 
@@ -166,6 +168,7 @@ class Player {
             this.doubleJumpUsed = false;
             this.stretch(0.75, 1.3);
             landingDust(this.x + this.width / 2, this.feetY);
+            comicSfx(this.x - 8, this.feetY - 8, 'ピョン!', '#FFFFFF', 13, 22);
             playJumpSound();
             return undo;
         }
@@ -175,6 +178,7 @@ class Player {
             this.doubleJumpUsed = true;
             this.stretch(0.75, 1.3);
             jumpRing(this.x + this.width / 2, this.feetY);
+            comicSfx(this.x - 8, this.feetY, 'ピョピョン!', '#FFD54F', 14, 26);
             playJumpSound();
             return { kind: 'double', frame: this.animationFrame };
         }
@@ -232,6 +236,8 @@ class Player {
             this.isJumping = false;
             if (this.fastFall) {
                 this.fastFall = false;
+                comicSfx(this.x + this.width / 2, this.feetY - 30, 'ズドン!', '#FF7043', 16, 26);
+                shakeScreen(4);
                 this.startSlide();
             }
         }
@@ -240,6 +246,10 @@ class Player {
         this.scaleY += (1 - this.scaleY) * 0.2;
 
         if (!grounded) {
+            if (this.isPlayer && Math.abs(this.velocityY) > 5 && this.animationFrame % 2 === 0) {
+                const rising = this.velocityY < 0;
+                motionLine(this.x + Math.random() * this.width, rising ? this.feetY + 4 : this.y - 30, 14 + Math.random() * 14, rising ? 1.5 : -1.5);
+            }
             this.stretch(this.scaleX, Math.max(this.scaleY, 1 + Math.min(Math.abs(this.velocityY) * 0.012, 0.15)));
         } else {
             this.runPhase += 0.18 + gameSpeed * 0.04;
@@ -1688,6 +1698,10 @@ function hitBoss(x, y) {
         const bossY = boss.y + boss.height / 2;
         explosionEffect(bossX, bossY, 2);
         starBurst(bossX, bossY, 14);
+        focusLines(bossX, bossY, 45);
+        comicSfx(bossX, bossY - 30, 'ズガガーン!!', '#FF5252', 28, 50);
+        hitStop(14);
+        say(player, 'やったぜ!', 90);
         addBanner('BOSS げきは!!');
         addScore(500, bossX, boss.y - 20);
         playBossDefeatSound();
@@ -1696,6 +1710,9 @@ function hitBoss(x, y) {
     } else {
         explosionEffect(x, y);
         addPopup(x, y - 30, 'HIT!', '#FF5252', 22);
+        comicSfx(x - 20, y + 10, 'ドゴォ!', '#FFA726', 20, 30);
+        focusLines(x, y, 12);
+        hitStop(5);
         playStompSound();
     }
 }
@@ -1704,6 +1721,7 @@ function hitBoss(x, y) {
 let player = null;
 let coins = [];
 let coinTimer = 0;
+let lastCoinFrame = -Infinity;
 let nextMilestone = 1000;
 let obstacles = [];
 let enemies = [];
@@ -2215,6 +2233,7 @@ function init() {
     items = [];
     coins = [];
     coinTimer = 0;
+    lastCoinFrame = -Infinity;
     nextMilestone = 1000;
     clearEffects();
     boss = null;
@@ -2271,6 +2290,21 @@ function addScore(points, x, y, color = '#FFD700') {
     void scoreElement.offsetWidth;
     scoreElement.classList.add('bump');
     updateUI();
+}
+
+function pushedReaction() {
+    addMark(player, 'sweat', 20);
+    addMark(player, 'anger', 20);
+    say(player, 'ぐぬぬ…', 40);
+}
+
+function guardReaction(x, y) {
+    poofEffect(x, y);
+    addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
+    comicSfx(x, y - 10, 'ガキーン!', '#4FC3F7', 18, 30);
+    addMark(player, 'sweat', 50);
+    say(player, 'セーフ!');
+    hitStop(4);
 }
 
 function rewardPass(target) {
@@ -2383,6 +2417,8 @@ function killPlayer() {
     const cy = player.y + player.height / 2;
     starBurst(cx, cy, 10);
     spawnParticle({ kind: 'burst', x: cx + 30, y: cy - 35, size: 36, life: DEATH_FREEZE_TICKS + 12, text: 'ドカーン!' });
+    focusLines(cx, cy, DEATH_FREEZE_TICKS + 6);
+    addMark(player, 'dizzy', DEATH_TICKS);
     shakeScreen(12);
     updateHighScore();
     stopMusic();
@@ -2402,6 +2438,8 @@ function dyingTick() {
     deathTimer++;
     if (deathTimer === DEATH_FREEZE_TICKS) {
         player.velocityY = -11;
+        say(player, 'ぎゃふん!', DEATH_TICKS);
+        comicSfx(player.x + player.width / 2, player.y - 30, 'ヒュ~ン', '#B39DDB', 16, 50);
         playDeathSound();
     }
     if (deathTimer > DEATH_FREEZE_TICKS) {
@@ -2414,7 +2452,7 @@ function dyingTick() {
     drawFrozenScene();
     player.draw();
     updateEffects();
-    drawEffects(view.width);
+    drawEffects();
 
     const flash = 0.7 - deathTimer * 0.08;
     if (flash > 0) {
@@ -2435,6 +2473,14 @@ function tick() {
         return;
     }
     applyWorldTransform();
+    if (hitStopTicks > 0) {
+        hitStopTicks--;
+        drawFrozenScene();
+        player.draw();
+        updateEffects();
+        drawEffects();
+        return;
+    }
 
     drawSky();
 
@@ -2514,6 +2560,9 @@ function tick() {
         playItemSound();
         nextMilestone += 1000;
     }
+    if (gameSpeed >= 3.5 && score % 240 === 0 && !player.isJumping && !player.sliding) {
+        comicSfx(player.x - 20, player.y + 6, 'ダダダッ', '#FFFFFF', 13, 30);
+    }
     if (Math.random() < Math.min((gameSpeed - 2) * 0.08, 0.4)) {
         speedLine(view.width, view.top + 20, 330, gameSpeed);
     }
@@ -2525,6 +2574,13 @@ function tick() {
         boss = new Boss(bossLevel);
         addBanner('WARNING!! BOSS', '#FF5252');
         shakeScreen(8);
+        focusLines(player.x + player.width / 2, player.y, 40, '#4A148C');
+        addMark(player, '!', 50);
+        addMark(player, 'sweat', 120);
+        say(player, 'で、でた~!', 90);
+        for (let k = 0; k < 4; k++) {
+            comicSfx(view.width - 50 - (k % 2) * 30, 140 + k * 45, 'ゴゴゴ', '#CE93D8', 18, 90 + k * 10);
+        }
         playBossAppearSound();
         switchBgm('battle');
         // 次のボス出現スコアを設定
@@ -2632,8 +2688,7 @@ function tick() {
             // 穴に落ちたらゲームオーバー
             if (player.hasShield) {
                 player.hasShield = false;
-                poofEffect(player.x + player.width / 2, player.y + player.height / 2);
-                addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
+                guardReaction(player.x + player.width / 2, player.y + player.height / 2);
                 obstacles.splice(i, 1);
                 playStompSound();
                 updateUI();
@@ -2646,10 +2701,12 @@ function tick() {
         if (player.alive && obstacles[i].type === 'block' && checkCollision(player.hitbox(), obstacles[i])) {
             // ブロックに当たったらプレイヤーを左に押し戻す
             player.x -= gameSpeed * 1.5; // ブロックの速度より少し速く押し戻す
+            pushedReaction();
         }
 
         if (player.alive && obstacles[i].type === 'gate' && checkCollision(player.hitbox(), obstacles[i])) {
             player.x -= gameSpeed * 1.5;
+            pushedReaction();
         }
 
         if (['hole', 'block', 'gate'].includes(obstacles[i].type)) {
@@ -2679,11 +2736,17 @@ function tick() {
         const enemy = enemies[i];
         if (!player.alive || enemy.knocked) continue;
         const enemyCenterX = enemy.x + enemy.width / 2;
+        if (!enemy.noticed && enemy.x > player.x && enemy.x - (player.x + player.width) < 120) {
+            enemy.noticed = true;
+            addMark(player, '!', 24);
+        }
 
         if (player.sliding && enemy.type !== 'flyer' && checkCollision(player, enemy)) {
             enemy.knockAway();
             starBurst(enemyCenterX, enemy.y + enemy.height / 2, 6);
             spawnParticle({ kind: 'burst', x: enemyCenterX, y: enemy.y, size: 26, life: 26, text: 'ズザーッ!' });
+            focusLines(enemyCenterX, enemy.y + enemy.height / 2, 10);
+            hitStop(3);
             shakeScreen(5);
             addScore(30, enemyCenterX + 40, enemy.y - 20);
             playStompSound(2);
@@ -2694,6 +2757,8 @@ function tick() {
         if (player.hasStarPower && checkCollision(player.hitbox(), enemy)) {
             enemy.knockAway();
             explosionEffect(enemyCenterX, enemy.y + enemy.height / 2, 0.7);
+            comicSfx(enemyCenterX, enemy.y - 16, 'バシーン!', '#FF80AB', 16, 26);
+            hitStop(2);
             addScore(100, enemyCenterX, enemy.y - 10, '#FF80AB'); // スターパワー中はボーナス多め
             playStompSound();
             continue;
@@ -2711,8 +2776,13 @@ function tick() {
             player.stompCombo++;
             stompEffect(enemyCenterX, enemy.y + enemy.height, enemy.color, enemy.width);
             addScore(50 * Math.min(2 ** (player.stompCombo - 1), 8), enemyCenterX + 45, enemy.y - 20);
+            focusLines(enemyCenterX, enemy.y + enemy.height / 2, 10 + player.stompCombo * 4);
+            hitStop(3 + Math.min(player.stompCombo, 4));
             if (player.stompCombo >= 2) {
                 addPopup(enemyCenterX + 45, enemy.y - 45, `${player.stompCombo} COMBO!`, '#FF9800', 16);
+            }
+            if (player.stompCombo >= 3) {
+                say(player, player.stompCombo >= 5 ? 'とまらないぜ!!' : 'まだまだ~!');
             }
             playStompSound(player.stompCombo);
             continue;
@@ -2724,8 +2794,7 @@ function tick() {
             if (player.hasShield) {
                 player.hasShield = false;
                 enemies.splice(i, 1); // 敵を消す
-                poofEffect(enemyCenterX, enemy.y + enemy.height / 2);
-                addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
+                guardReaction(enemyCenterX, enemy.y + enemy.height / 2);
                 playStompSound(); // シールド発動音
                 updateUI();
                 continue;
@@ -2752,14 +2821,14 @@ function tick() {
             // スターパワー中は弾を消す
             if (player.hasStarPower) {
                 sparkle(bullets[i].x, bullets[i].y, '#FF80AB');
+                comicSfx(bullets[i].x, bullets[i].y - 10, 'パシッ', '#FF80AB', 12, 20);
                 bullets.splice(i, 1);
                 continue;
             }
             // シールドがあれば1回防御
             if (player.hasShield) {
                 player.hasShield = false;
-                poofEffect(bullets[i].x, bullets[i].y);
-                addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
+                guardReaction(bullets[i].x, bullets[i].y);
                 bullets.splice(i, 1);
                 playStompSound(); // シールド発動音
                 updateUI();
@@ -2786,6 +2855,8 @@ function tick() {
                 bombs[i].reflectToBoss(boss);
                 sparkle(bombs[i].x + bombs[i].width / 2, bombs[i].y + bombs[i].height / 2, '#76FF03', 10);
                 addPopup(player.x + player.width / 2, player.y - 20, 'はね返し!', '#76FF03', 16);
+                comicSfx(player.x + player.width + 20, player.y, 'カキーン!', '#76FF03', 18, 30);
+                hitStop(4);
                 playItemSound(); // 反射音
             } else {
                 // ボスがいない場合は爆弾を消す
@@ -2819,6 +2890,9 @@ function tick() {
             sparkle(item.x + item.width / 2, item.y + item.height / 2, '#FFFFFF', 12);
             jumpRing(item.x + item.width / 2, item.y + item.height / 2);
             addPopup(item.x + item.width / 2, item.y - 15, label, '#80DEEA', 18);
+            comicSfx(item.x + item.width / 2, item.y - 40, 'キュピーン!', '#FFF176', 18, 34);
+            focusLines(item.x + item.width / 2, item.y + item.height / 2, 16, '#FFFFFF');
+            say(player, item.type === 'star' ? 'むてきだ~!' : 'やった~!');
             if (items[i].type === 'wing') {
                 player.hasDoubleJump = true;
                 player.doubleJumpTimer = 1800; // 30秒 (60fps * 30秒)
@@ -2852,8 +2926,7 @@ function tick() {
                 // シールドがあれば1回防御
                 if (player.hasShield) {
                     player.hasShield = false;
-                    poofEffect(player.x + player.width / 2, player.y + player.height / 2);
-                    addPopup(player.x + player.width / 2, player.y - 20, 'GUARD!', '#4FC3F7');
+                    guardReaction(player.x + player.width / 2, player.y + player.height / 2);
                     playStompSound(); // シールド発動音
                     updateUI();
                 } else if (!player.hasStarPower) {
@@ -2874,43 +2947,67 @@ function tick() {
             coins.splice(i, 1);
             sparkle(coin.x + coin.width / 2, coin.y + coin.height / 2);
             addScore(10, coin.x + coin.width / 2, coin.y - 8);
+            if (player.animationFrame - lastCoinFrame > 30) {
+                comicSfx(coin.x + coin.width / 2, coin.y - 26, 'チャリン♪', '#FFE082', 12, 26);
+            }
+            lastCoinFrame = player.animationFrame;
             playCoinSound();
         }
     }
 
     updateEffects();
-    drawEffects(view.width);
+    drawEffects();
 }
 
-function drawOverlay(lines) {
+function drawOverlay(lines, { gloom = false } = {}) {
     scoreElement.hidden = true;
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, view.cssWidth, view.cssHeight);
+    if (gloom) drawGloomLines();
 
     const unit = Math.min(view.cssWidth / 14, view.cssHeight / 9, 56);
     const totalHeight = lines.reduce((sum, line) => sum + unit * line.size * 1.5, 0);
     let y = (view.cssHeight - totalHeight) / 2;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
     for (const line of lines) {
-        ctx.font = `bold ${unit * line.size}px sans-serif`;
-        ctx.fillStyle = line.color || 'white';
-        ctx.fillText(line.text, view.cssWidth / 2, y);
-        y += unit * line.size * 1.5;
+        const size = unit * line.size;
+        if (line.comic) {
+            comicText(line.text, view.cssWidth / 2, y + size / 2, size, line.color || '#FFEB3B', -0.06);
+        } else {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = `bold ${size}px sans-serif`;
+            ctx.fillStyle = line.color || 'white';
+            ctx.fillText(line.text, view.cssWidth / 2, y + size / 2);
+        }
+        y += size * 1.5;
     }
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
 }
 
+// 漫画でショックを表す縦線を、画面上部から垂らす
+function drawGloomLines() {
+    ctx.strokeStyle = 'rgba(30, 20, 60, 0.75)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 6; x < view.cssWidth; x += 9) {
+        const length = view.cssHeight * (0.25 + 0.25 * Math.abs(Math.sin(x * 12.9898)));
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, length);
+    }
+    ctx.stroke();
+}
+
 function drawGameOver() {
     const isNewRecord = score > 0 && score >= highScore;
     drawOverlay([
-        { text: 'GAME OVER', size: 1.1 },
+        { text: isNewRecord ? 'やったね!!' : 'ガーン!!', size: 0.7, color: isNewRecord ? '#FFD54F' : '#90CAF9', comic: true },
+        { text: 'GAME OVER', size: 1.1, color: '#FF5252', comic: true },
         { text: `スコア ${score}`, size: 0.7 },
         { text: isNewRecord ? `🎉 ハイスコア更新！ ${highScore}` : `ハイスコア ${highScore}`, size: 0.55, color: '#FFD700' },
         { text: 'タップしてリスタート', size: 0.45 },
-    ]);
+    ], { gloom: !isNewRecord });
 }
 
 function drawBackdrop() {
@@ -2924,7 +3021,7 @@ function drawBackdrop() {
 function drawTitle() {
     drawBackdrop();
     drawOverlay([
-        { text: 'ジャンプランナー', size: 1 },
+        { text: 'ジャンプランナー', size: 1.1, comic: true },
         { text: 'タップしてスタート', size: 0.5 },
         { text: 'タップでジャンプ / 下スワイプでスライディング', size: 0.32, color: '#FFD700' },
     ]);
