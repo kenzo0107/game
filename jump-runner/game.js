@@ -662,6 +662,8 @@ class Obstacle {
     }
 }
 
+const WALKER_LEG_LENGTH = 8;
+
 // 敵クラス
 class Enemy {
     constructor(type) {
@@ -673,7 +675,6 @@ class Enemy {
         this.animationFrame = 0;
 
         if (type === 'walker') {
-            this.y = 330; // 地面の上
             this.speed = gameSpeed + 1;
             this.color = '#8B0000'; // ダークレッド
         } else if (type === 'flyer') {
@@ -687,13 +688,19 @@ class Enemy {
             this.width = 35;
             this.height = 25;
         } else if (type === 'shooter') {
-            this.y = 330; // 地面の上
             this.speed = gameSpeed * 0.8;
             this.shootCooldown = 0;
             this.shootInterval = 100; // フレーム数
             this.color = '#8B008B'; // ダークマゼンタ
             this.width = 35;
         }
+        if (type !== 'flyer') this.y = this.groundedY();
+    }
+
+    // 主人公と同じ道の上を走らせるため、足の先を主人公と同じ線にそろえる
+    groundedY() {
+        const legLength = this.type === 'walker' ? WALKER_LEG_LENGTH : 0;
+        return RUN_LINE_Y - legLength - this.height - terrainHeightAt(this.x + this.width / 2);
     }
 
     knockAway() {
@@ -715,7 +722,7 @@ class Enemy {
         this.animationFrame++;
 
         if (this.type !== 'flyer') {
-            this.y = GROUND_Y - this.height - terrainHeightAt(this.x + this.width / 2);
+            this.y = this.groundedY();
         }
 
         if (this.type === 'flyer') {
@@ -792,8 +799,8 @@ class Enemy {
             // 歩行アニメーション用の足
             const legOffset = Math.floor(this.animationFrame / 8) % 2 === 0 ? 3 : -3;
             ctx.fillStyle = '#8B0000';
-            ctx.fillRect(this.x + 5 + legOffset, this.y + this.height, 6, 8);
-            ctx.fillRect(this.x + 19 - legOffset, this.y + this.height, 6, 8);
+            ctx.fillRect(this.x + 5 + legOffset, this.y + this.height, 6, WALKER_LEG_LENGTH);
+            ctx.fillRect(this.x + 19 - legOffset, this.y + this.height, 6, WALKER_LEG_LENGTH);
 
         } else if (this.type === 'flyer') {
             // 空飛ぶ敵 - コウモリ風
