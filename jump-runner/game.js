@@ -55,7 +55,7 @@ function applyWorldTransform() {
 resizeCanvas();
 
 // ゲーム状態
-let gameState = 'ready'; // ready, story, playing, dying, gameover
+let gameState = 'ready'; // ready, story, playing, dying, miss, gameover
 let score = 0;
 let highScore = 0;
 let gameSpeed = 2; // 3から2に変更（難易度を下げる）
@@ -2547,6 +2547,8 @@ function hitBoss(x, y) {
         addBanner(`いろのタネ ${seedsCollected}/${BOSS_ROSTER.length} とりもどした!`, boss.profile.color);
         seedPickupEffect(bossX, bossY, boss.profile.color);
         addScore(500, bossX, boss.y - 20);
+        lives++;
+        addPopup(player.x + player.width / 2, player.y - 40, '1UP!', '#69F0AE', 26);
         playBossDefeatSound();
         boss = null;
         updateSeedsUI();
@@ -2592,6 +2594,8 @@ let boss = null;
 let bossLevel = 0;
 let seedsCollected = 0;
 let round = 1;
+const START_LIVES = 3;
+let lives = START_LIVES;
 // 撃破の演出を見せきってから紙芝居に切り替える
 const ENDING_DELAY_TICKS = 120;
 let endingTimer = 0;
@@ -3120,6 +3124,25 @@ function bgmAfterBoss() {
 
 // 初期化
 function init() {
+    boss = null;
+    bossLevel = 0;
+    seedsCollected = 0;
+    round = 1;
+    lives = START_LIVES;
+    endingTimer = 0;
+    nextMilestone = 1000;
+    nextBossScore = 3000;
+    score = 0;
+    highScore = loadHighScore();
+    gameSpeed = 2; // 3から2に変更（難易度を下げる）
+    resetStage();
+    currentBgmType = 'normal';
+    gloom = gloomTarget();
+    updateUI();
+}
+
+// 進み具合（スコア・タネ・周回・速さ）は残し、画面上の物と主人公だけを置き直す
+function resetStage() {
     obstacles = [];
     enemies = [];
     bullets = [];
@@ -3128,17 +3151,7 @@ function init() {
     coins = [];
     coinTimer = 0;
     lastCoinFrame = -Infinity;
-    nextMilestone = 1000;
     clearEffects();
-    boss = null;
-    bossLevel = 0;
-    seedsCollected = 0;
-    round = 1;
-    endingTimer = 0;
-    nextBossScore = 3000;
-    score = 0;
-    highScore = loadHighScore();
-    gameSpeed = 2; // 3から2に変更（難易度を下げる）
     obstacleTimer = 0;
     backgroundTimer = 0;
     resetTerrain();
@@ -3164,20 +3177,34 @@ function init() {
         groundLines.push(new GroundLine(i * 85));
     }
 
-    // 音楽停止
     stopMusic();
-    currentBgmType = 'normal';
+}
 
-    gloom = gloomTarget();
+// 倒しかけのボスを残すと、置き直した主人公の目の前に体力の減ったボスがいることになるため、出現からやり直させる
+function continueGame() {
+    if (boss) {
+        boss = null;
+        bossLevel--;
+        nextBossScore -= 3000;
+    }
+    resetStage();
+    gameState = 'playing';
+    addBanner(`のこり ${lives}き がんばれ!`, '#69F0AE');
     updateUI();
+    playStartSound();
+    switchBgm(bgmAfterBoss());
+    startGameLoop();
 }
 
 // UI更新
 const scoreElement = document.getElementById('score');
+const livesElement = document.getElementById('lives');
 
 function updateUI() {
     scoreElement.textContent = score;
     scoreElement.hidden = gameState !== 'playing' && gameState !== 'dying';
+    livesElement.textContent = `×${lives}`;
+    livesElement.hidden = scoreElement.hidden;
     updateSeedsUI();
 }
 
@@ -3298,6 +3325,10 @@ function gameLoop(now) {
         drawGameOver();
         return;
     }
+    if (gameState === 'miss') {
+        drawMiss();
+        return;
+    }
     requestAnimationFrame(gameLoop);
 }
 
@@ -3362,7 +3393,8 @@ function dyingTick() {
     }
 
     if (deathTimer >= DEATH_TICKS) {
-        gameState = 'gameover';
+        lives--;
+        gameState = lives > 0 ? 'miss' : 'gameover';
         gameOverAt = performance.now();
         updateUI();
     }
@@ -3953,6 +3985,15 @@ function drawGameOver() {
     ], { gloom: !isNewRecord });
 }
 
+function drawMiss() {
+    drawOverlay([
+        { text: 'ミス!', size: 1.1, color: '#FF8A65', comic: true },
+        { text: `のこり ${lives}き`, size: 0.8, color: '#69F0AE' },
+        { text: `スコア ${score}`, size: 0.55 },
+        { text: 'タップしてつづきから', size: 0.45 },
+    ], { gloom: true });
+}
+
 function drawBackdrop() {
     clearEffects();
     applyWorldTransform();
@@ -4020,7 +4061,11 @@ function handleTap() {
         advanceStory();
     } else if (gameState === 'ready') {
         startFromTitle();
-    } else if (gameState === 'gameover' && performance.now() - gameOverAt >= RESTART_DELAY_MS) {
+    } else if (performance.now() - gameOverAt < RESTART_DELAY_MS) {
+        return;
+    } else if (gameState === 'miss') {
+        continueGame();
+    } else if (gameState === 'gameover') {
         startGame();
     }
 }
@@ -4080,6 +4125,9 @@ window.addEventListener('resize', () => {
     } else if (gameState === 'gameover') {
         drawBackdrop();
         drawGameOver();
+    } else if (gameState === 'miss') {
+        drawBackdrop();
+        drawMiss();
     }
 });
 

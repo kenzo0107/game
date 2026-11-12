@@ -77,6 +77,23 @@ body {
     }
 }
 
+.lives {
+    position: absolute;
+    top: calc(env(safe-area-inset-top) + 12px + clamp(30px, 7.5vmin, 50px));
+    left: calc(env(safe-area-inset-left) + 68px);
+    font-family: 'Arial Black', 'Arial', sans-serif;
+    font-size: clamp(16px, 4vmin, 24px);
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+
+.lives::before {
+    content: '🏃';
+    margin-right: 2px;
+}
+
 [hidden] {
     display: none !important;
 }
