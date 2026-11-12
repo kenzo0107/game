@@ -140,6 +140,9 @@ for entry in "${GAMES[@]}"; do
       </a>"$'\n'
 done
 
+BUILD_VERSION=$(git rev-parse --short HEAD)
+BUILD_DATE=$(TZ=Asia/Tokyo git log -1 --format=%cd --date=format-local:'%Y-%m-%d %H:%M')
+
 cat >"$OUT_DIR/index.html" <<EOF
 <!doctype html>
 <html lang="ja">
@@ -387,6 +390,7 @@ $links      </main>
       <footer>
         <div class="keys">← ↑ → ↓ SELECT · ENTER START</div>
         <div>${#GAMES[@]} GAMES · © GAME ARCADE</div>
+        <div>VER $BUILD_VERSION · $BUILD_DATE</div>
       </footer>
     </div>
     <script>
