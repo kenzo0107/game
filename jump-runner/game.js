@@ -7,6 +7,8 @@ let ctx = screenCtx;
 
 const WORLD_HEIGHT = 400;
 const GROUND_Y = 360;
+const SKY_COLOR = '#87CEEB';
+const HOLE_FALL_DEPTH = 12;
 // 縦持ちでもキャラが小さくなりすぎないよう、横方向に見える範囲はこの幅まで狭める
 const MIN_VIEW_WIDTH = 512;
 // キャラを大きく見せるため、雲しかない空の上端は横持ちで見切れてよいことにして拡大率を上げる
@@ -216,6 +218,7 @@ class Player {
 
         // 坂道や段差の上に乗れるかチェック
         let currentGroundY = this.groundY - terrainHeightAt(this.x + this.width / 2);
+        if (obstacles.some((o) => o.isHoleUnder(this))) currentGroundY = Infinity;
         for (const obstacle of obstacles) {
             const result = obstacle.canStandOn(this.x, this.y, this.width, this.height);
             if (result.canStand) {
@@ -513,10 +516,29 @@ class Obstacle {
         this.x -= gameSpeed;
     }
 
+    // 体の端が縁にかかっただけで落ちると、飛び越えたつもりの着地でやられてしまうため中心で判定する
+    isHoleUnder(character) {
+        if (this.type !== 'hole') return false;
+        const centerX = character.x + character.width / 2;
+        return centerX > this.x && centerX < this.x + this.width;
+    }
+
+    swallows(character) {
+        return this.isHoleUnder(character) && character.y > character.groundY - this.lift + HOLE_FALL_DEPTH;
+    }
+
     draw() {
         if (this.type === 'hole') {
-            ctx.fillStyle = '#333';
-            ctx.fillRect(this.x, this.y, this.width, view.bottom - this.y);
+            ctx.fillStyle = SKY_COLOR;
+            ctx.fillRect(this.x, this.y - 2, this.width, view.bottom - this.y + 2);
+            ctx.strokeStyle = '#2E7D32';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.x, view.bottom);
+            ctx.moveTo(this.x + this.width, this.y);
+            ctx.lineTo(this.x + this.width, view.bottom);
+            ctx.stroke();
         } else if (this.type === 'block') {
             // より明るく目立つオレンジ色
             ctx.fillStyle = '#FF8C00';
@@ -2347,7 +2369,7 @@ function checkStomp(player, enemy) {
 
 
 function drawSky() {
-    ctx.fillStyle = '#87CEEB';
+    ctx.fillStyle = SKY_COLOR;
     ctx.fillRect(0, view.top, view.width, view.bottom - view.top);
 }
 
@@ -2685,7 +2707,7 @@ function tick() {
 
         // プレイヤーとの衝突判定（穴とブロックのみ）
         // 坂道や段差は乗れるので衝突判定しない
-        if (player.alive && obstacles[i].type === 'hole' && checkCollision(player.hitbox(), obstacles[i])) {
+        if (player.alive && obstacles[i].swallows(player)) {
             // 穴に落ちたらゲームオーバー
             if (player.hasShield) {
                 player.hasShield = false;
