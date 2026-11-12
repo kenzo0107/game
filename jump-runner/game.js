@@ -499,7 +499,8 @@ class Obstacle {
         this.x = view.width;
 
         if (type === 'hole') {
-            this.width = 80;
+            // 滞空時間は速度によらず一定なので、幅が固定だと低速時は踏み切れる猶予が約10フレームしかなく飛び越えられない
+            this.width = Math.min(80, 30 * gameSpeed);
             this.height = 60;
             this.y = 360;
         } else if (type === 'block') {
