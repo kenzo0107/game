@@ -1655,7 +1655,7 @@ function spawnRampCoins(ramp) {
     const v = -player.jumpPower;
     const takeoffX = ramp.x + ramp.width * 0.75;
     const centerY = ramp.runLineY - ramp.height * 0.75 - (player.feetY - player.y) + player.height / 2;
-    const speed = gameSpeed + (0.002 * (takeoffX - player.x - player.width / 2)) / gameSpeed;
+    const speed = gameSpeed + (speedGainPerFrame() * (takeoffX - player.x - player.width / 2)) / gameSpeed;
     for (const t of [16, 20, 25, 30, 34]) {
         coins.push(new Coin(takeoffX + speed * t - 8, centerY - (v * t - (g * t * t) / 2) - 8));
     }
@@ -1711,7 +1711,7 @@ function spawnStepUpGuide(edgeX, fromHeight, toHeight) {
     const landFrames = (v + Math.sqrt(v * v - 2 * g * (toHeight - fromHeight))) / g;
     // 段差に着くまでにスコアが進んで速度が上がるため、その分を見込む（1 フレームで score+1、100 ごとに +0.2）
     const framesToEdge = (edgeX - player.x - player.width) / gameSpeed;
-    const speed = gameSpeed + 0.002 * framesToEdge;
+    const speed = gameSpeed + speedGainPerFrame() * framesToEdge;
     const centerY = player.groundY - fromHeight + player.height / 2;
     const count = 7;
     for (let i = 0; i < count; i++) {
@@ -1782,6 +1782,11 @@ let bombs = [];
 let items = [];
 let boss = null;
 let bossLevel = 0;
+
+// 序盤は操作に慣れてもらうため、最初のボスが出るまでは速くしない。ボス戦中はスコアが増えないので、実際に速くなるのは倒したあとから
+function speedGainPerFrame() {
+    return bossLevel > 0 ? 0.002 : 0;
+}
 let nextBossScore = 3000; // 次にボスが出現するスコア
 
 // 地面の模様クラス（スピード感を出すため）
@@ -2603,7 +2608,7 @@ function tick() {
     // スコア更新（ボス戦中は増えない）
     if (!boss) {
         score++;
-        if (score % 100 === 0) {
+        if (score % 100 === 0 && speedGainPerFrame() > 0) {
             gameSpeed += 0.2;
         }
     }
