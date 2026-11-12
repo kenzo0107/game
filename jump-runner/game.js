@@ -363,7 +363,7 @@ class Player {
             ctx.translate(-cx, -hipY);
         } else {
             const bob = this.isJumping ? 0 : -Math.abs(Math.sin(this.runPhase)) * 3;
-            const lean = this.isJumping ? Math.max(Math.min(this.velocityY * 0.02, 0.25), -0.25) : 0.12;
+            const lean = this.isJumping ? Math.max(Math.min(this.velocityY * 0.02, 0.25), -0.25) : 0.05;
             ctx.translate(cx, this.feetY + bob);
             ctx.rotate(lean);
             ctx.scale(this.scaleX, this.scaleY);
@@ -415,9 +415,10 @@ class Player {
             ctx.fillRect(this.x + 9, this.y + 7, 7, 7);
             ctx.fillRect(this.x + 19, this.y + 7, 7, 7);
             ctx.fillStyle = '#000';
-            const pupilY = this.isJumping && this.velocityY < 0 ? this.y + 8 : this.y + 10;
-            ctx.fillRect(this.x + 12, pupilY, 3, 3);
-            ctx.fillRect(this.x + 22, pupilY, 3, 3);
+            // 体を前に傾けるぶん顔も下を向くため、黒目は白目の上寄りに置いて前を見ているように見せる
+            const pupilY = this.isJumping && this.velocityY > 0 ? this.y + 10 : this.y + 8;
+            ctx.fillRect(this.x + 13, pupilY, 3, 3);
+            ctx.fillRect(this.x + 23, pupilY, 3, 3);
         }
 
         ctx.fillStyle = '#000';
