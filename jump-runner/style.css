@@ -26,10 +26,25 @@ body {
     display: block;
 }
 
-.score {
+.back {
     position: fixed;
     top: calc(env(safe-area-inset-top) + 12px);
     left: calc(env(safe-area-inset-left) + 16px);
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: white;
+    text-decoration: none;
+    font-size: 1.3rem;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.score {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 12px);
+    left: calc(env(safe-area-inset-left) + 68px);
     font-family: 'Arial Black', 'Arial', sans-serif;
     font-size: clamp(24px, 6vmin, 40px);
     font-weight: bold;

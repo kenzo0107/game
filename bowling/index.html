@@ -49,6 +49,16 @@
       background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 20px; cursor: pointer;
     }
     #back { left: 12px; }
+    #to-top {
+      position: absolute; top: 8px; left: 8px; z-index: 1; display: grid; place-items: center;
+      width: 40px; height: 40px; border-radius: 50%; background: rgba(0, 0, 0, 0.55);
+      color: #fff; font-size: 20px; text-decoration: none;
+    }
+    @media (max-width: 480px) {
+      #scoreboard { left: 56px; right: 8px; transform: none; max-width: none; }
+      .frame { flex: 1; min-width: 0; }
+      .frame .marks { gap: 1px; }
+    }
     .move-btn {
       position: absolute; top: 55%; width: 60px; height: 60px; border-radius: 50%; border: none;
       background: rgba(255, 213, 74, 0.85); color: #222; font-size: 26px; cursor: pointer;
@@ -105,6 +115,7 @@
   <button id="back" class="corner-btn" aria-label="メニュー">≡</button>
   <button id="sound" class="corner-btn" aria-label="音のオンオフ">♪</button>
   <div id="menu"></div>
+  <a id="to-top" href="../" aria-label="トップへ戻る">←</a>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

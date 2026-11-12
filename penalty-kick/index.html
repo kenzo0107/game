@@ -57,12 +57,26 @@
             pointer-events: none;
         }
 
+        .back {
+            display: grid;
+            place-items: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            color: white;
+            text-decoration: none;
+            font-size: 1.3rem;
+            background: rgba(0, 0, 0, 0.3);
+            pointer-events: auto;
+        }
+
         .score {
             font-size: 1.2rem;
         }
 
         .kicks {
             display: flex;
+            margin-left: auto;
             gap: 6px;
         }
 
@@ -185,6 +199,7 @@
     <canvas id="field"></canvas>
 
     <div class="hud">
+        <a class="back" href="../" aria-label="トップへ戻る">←</a>
         <div class="score">⚽ <span id="goals">0</span> ゴール</div>
         <div class="kicks" id="kicks"></div>
     </div>

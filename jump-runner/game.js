@@ -3156,6 +3156,7 @@ const SWIPE_DOWN_PX = 30;
 let swipeStartY = null;
 
 document.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.back')) return;
     e.preventDefault();
     swipeStartY = e.clientY;
     handleTap();

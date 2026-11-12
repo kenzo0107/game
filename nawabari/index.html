@@ -273,6 +273,23 @@
             cursor: pointer;
         }
 
+        .back {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 1;
+            display: grid;
+            place-items: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            background: rgba(15, 23, 42, 0.6);
+            color: white;
+            text-decoration: none;
+            font-size: 18px;
+        }
+
         .win {
             color: #34d399;
         }
@@ -389,6 +406,7 @@
         <div class="field">
             <div class="board">
                 <canvas id="gameCanvas" width="800" height="600"></canvas>
+                <a class="back" href="../" aria-label="トップへ戻る">←</a>
                 <button type="button" class="mute-btn" id="muteBtn" aria-label="音を消す">🔊</button>
 
                 <div class="overlay show" id="startOverlay">
