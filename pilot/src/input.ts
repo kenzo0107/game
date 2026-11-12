@@ -4,6 +4,7 @@ export interface InputState {
   yaw: number;
   throttleUp: boolean;
   throttleDown: boolean;
+  deploy: boolean;
 }
 
 type Action =
@@ -14,7 +15,8 @@ type Action =
   | 'yawLeft'
   | 'yawRight'
   | 'throttleUp'
-  | 'throttleDown';
+  | 'throttleDown'
+  | 'deploy';
 
 const KEY_BINDINGS: Record<Action, string> = {
   pitchUp: 'arrowup',
@@ -25,6 +27,7 @@ const KEY_BINDINGS: Record<Action, string> = {
   yawRight: 'e',
   throttleUp: 'w',
   throttleDown: 's',
+  deploy: ' ',
 };
 
 const STICK_DEAD_ZONE = 0.15;
@@ -131,6 +134,7 @@ export class InputController {
       yaw: this.digitalAxis('yawLeft', 'yawRight'),
       throttleUp: this.isActive('throttleUp'),
       throttleDown: this.isActive('throttleDown'),
+      deploy: this.isActive('deploy'),
     };
   }
 }

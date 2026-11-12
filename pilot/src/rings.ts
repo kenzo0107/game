@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Placement } from './stages';
 
 const RING_RADIUS = 9;
+const FLAT_RING_RADIUS = 12;
 
 interface Ring {
   mesh: THREE.Mesh;
@@ -13,21 +14,25 @@ interface Ring {
 
 export class Rings {
   private rings: Ring[];
-  private geometry = new THREE.TorusGeometry(RING_RADIUS, 0.7, 10, 40);
+  private radius: number;
+  private geometry: THREE.TorusGeometry;
   private idleMaterial = new THREE.MeshLambertMaterial({ color: 0xffcc00, emissive: 0x664400 });
   private nextMaterial = new THREE.MeshLambertMaterial({ color: 0xff7700, emissive: 0xaa3300 });
   private passedMaterial = new THREE.MeshLambertMaterial({ color: 0x33dd88, emissive: 0x116633 });
 
-  constructor(scene: THREE.Scene, placements: Placement[]) {
+  constructor(scene: THREE.Scene, placements: Placement[], flat = false) {
+    this.radius = flat ? FLAT_RING_RADIUS : RING_RADIUS;
+    this.geometry = new THREE.TorusGeometry(this.radius, flat ? 1 : 0.7, 10, 48);
     this.rings = placements.map((p) => {
       const mesh = new THREE.Mesh(this.geometry, this.idleMaterial);
       mesh.position.set(p.x, p.y, p.z);
-      mesh.rotation.y = p.heading;
+      if (flat) mesh.rotation.x = Math.PI / 2;
+      else mesh.rotation.y = p.heading;
       scene.add(mesh);
       return {
         mesh,
         center: mesh.position.clone(),
-        normal: new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading)),
+        normal: flat ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading)),
         passed: false,
         prevSide: null,
       };
@@ -50,7 +55,7 @@ export class Rings {
       offset.subVectors(position, ring.center);
       const side = offset.dot(ring.normal);
       const lateral = offset.addScaledVector(ring.normal, -side).length();
-      if (ring.prevSide !== null && ring.prevSide < 0 && side >= 0 && lateral < RING_RADIUS) {
+      if (ring.prevSide !== null && ring.prevSide < 0 && side >= 0 && lateral < this.radius) {
         ring.passed = true;
         newlyPassed++;
       }

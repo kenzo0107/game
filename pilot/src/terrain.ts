@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { StageConfig } from './stages';
+import { FlightStage, SkydiveStage, StageConfig } from './stages';
 
 export type Surface = 'runway' | 'grass' | 'ocean';
 
 export const GROUND_LEVEL = -50;
 export const RUNWAY_SURFACE = -49.5;
 export const OCEAN_SURFACE = -51;
+const TARGET_COLORS = [0xffffff, 0xe03030];
 const APPROACH_LENGTH = 300;
 const APPROACH_SPREAD = 0.3;
 
@@ -20,10 +21,10 @@ export class Terrain {
   }
 
   private build(): void {
-    const { island, runway } = this.stage;
+    const { island } = this.stage;
 
     const ocean = new THREE.Mesh(
-      new THREE.PlaneGeometry(2400, 2400),
+      new THREE.PlaneGeometry(6000, 6000),
       new THREE.MeshLambertMaterial({ color: 0x1e90ff }),
     );
     ocean.rotation.x = -Math.PI / 2;
@@ -46,6 +47,25 @@ export class Terrain {
     grass.position.set(island.x, GROUND_LEVEL, island.z);
     this.group.add(grass);
 
+    if (this.stage.kind === 'flight') this.buildRunway(this.stage.runway);
+    else this.buildTarget(this.stage.target);
+  }
+
+  private buildTarget(target: SkydiveStage['target']): void {
+    const bands = 4;
+    for (let i = 0; i < bands; i++) {
+      const outer = target.radius * (1 - i / bands);
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(outer, 48),
+        new THREE.MeshLambertMaterial({ color: TARGET_COLORS[(bands - i) % 2] }),
+      );
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.set(target.x, GROUND_LEVEL + 0.05 * (i + 1), target.z);
+      this.group.add(disc);
+    }
+  }
+
+  private buildRunway(runway: FlightStage['runway']): void {
     const strip = new THREE.Group();
     strip.position.set(runway.x, RUNWAY_SURFACE, runway.z);
     strip.rotation.y = runway.heading;
@@ -84,17 +104,21 @@ export class Terrain {
   }
 
   public surfaceAt(x: number, z: number): Surface {
-    const { island, runway } = this.stage;
-    const dx = x - runway.x;
-    const dz = z - runway.z;
-    const along = dx * Math.sin(runway.heading) + dz * Math.cos(runway.heading);
-    const across = dx * Math.cos(runway.heading) - dz * Math.sin(runway.heading);
-    if (Math.abs(along) <= runway.length / 2 && Math.abs(across) <= runway.width / 2) return 'runway';
+    const { island } = this.stage;
+    if (this.stage.kind === 'flight') {
+      const { runway } = this.stage;
+      const dx = x - runway.x;
+      const dz = z - runway.z;
+      const along = dx * Math.sin(runway.heading) + dz * Math.cos(runway.heading);
+      const across = dx * Math.cos(runway.heading) - dz * Math.sin(runway.heading);
+      if (Math.abs(along) <= runway.length / 2 && Math.abs(across) <= runway.width / 2) return 'runway';
+    }
     if (Math.abs(x - island.x) <= island.width / 2 && Math.abs(z - island.z) <= island.depth / 2) return 'grass';
     return 'ocean';
   }
 
   public isOnApproach(x: number, z: number): boolean {
+    if (this.stage.kind !== 'flight') return false;
     const { runway } = this.stage;
     const dx = x - runway.x;
     const dz = z - runway.z;

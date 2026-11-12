@@ -8,8 +8,9 @@ import { Terrain } from './terrain';
 import { Rings } from './rings';
 import { Music } from './music';
 import { SONGS } from './songs';
+import { CrashCause, Skydiver } from './skydiver';
 import { Sound } from './sound';
-import { STAGES } from './stages';
+import { STAGES, StageConfig } from './stages';
 
 type Phase = 'menu' | 'playing' | 'crashed' | 'cleared';
 
@@ -29,7 +30,12 @@ const PROGRESS_KEY = 'pilot.progress';
 const loadProgress = (): Progress => {
   try {
     const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) ?? 'null') as Progress | null;
-    if (saved && Number.isInteger(saved.unlocked) && Array.isArray(saved.stars)) return saved;
+    if (saved && Number.isInteger(saved.unlocked) && Array.isArray(saved.stars)) {
+      // ステージを追加する前に最終ステージをクリアした人も、追加したステージへ進めるようにする
+      const lastCleared = saved.stars.reduce((last, stars, i) => (stars > 0 ? i : last), -1);
+      saved.unlocked = Math.max(saved.unlocked, Math.min(lastCleared + 2, STAGES.length));
+      return saved;
+    }
   } catch {
     // 壊れた値や保存できない環境で例外を投げると遊べなくなるため、最初からの進行に戻す
   }
@@ -69,12 +75,31 @@ const CLEAR_TAP_DELAY_MS = 800;
 const LOW_ALTITUDE = 12;
 const LOW_ALTITUDE_ALERT_INTERVAL = 0.9;
 
+const CHUTE_WARNING_ALTITUDE = 150;
+
+const TOUCH_LABELS: Record<StageConfig['kind'], Record<string, string>> = {
+  flight: { throttleDown: '減速', throttleUp: '加速', yawLeft: '機首←', yawRight: '機首→' },
+  skydive: { throttleDown: 'ゆっくり', throttleUp: '急降下', yawLeft: '向き←', yawRight: '向き→' },
+};
+
+const LOW_WARNINGS: Record<StageConfig['kind'], string> = {
+  flight: '⚠ 高度が低すぎる！ 機首を上げよう',
+  skydive: '⚠ パラシュートを開こう！',
+};
+
+const CRASH_MESSAGES: Record<CrashCause, [string, string]> = {
+  'no-chute': ['パラシュートが開かなかった…', 'パラシュートボタンで開こう'],
+  hard: ['着地が速すぎた…', 'パラシュートはもっと高いところで開こう'],
+  ocean: ['海に落ちた…', '島の上に降りよう'],
+};
+
 const starText = (count: number): string => '★'.repeat(count) + '☆'.repeat(3 - count);
 
 class Game {
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private renderer = new THREE.WebGLRenderer({ antialias: true });
+  private fog = new THREE.Fog(0x87ceeb, 100, 1500);
   private timer = new THREE.Timer();
   private input = new InputController();
   private sound = new Sound();
@@ -89,7 +114,7 @@ class Game {
   private stageIndex = 0;
   private terrain!: Terrain;
   private rings!: Rings;
-  private aircraft!: Aircraft;
+  private vehicle!: Aircraft | Skydiver;
   private explosion: Explosion | null = null;
   private primaryAction: (() => void) | null = null;
   private bannerTimer = 0;
@@ -105,7 +130,7 @@ class Game {
     const sun = new THREE.DirectionalLight(0xffffff, 0.8);
     sun.position.set(50, 100, 50);
     this.scene.add(sun);
-    this.scene.fog = new THREE.Fog(0x87ceeb, 100, 1500);
+    this.scene.fog = this.fog;
 
     window.addEventListener('resize', () => this.onWindowResize());
     window.addEventListener('keydown', (e) => this.onKey(e));
@@ -120,7 +145,7 @@ class Game {
 
   private loadStage(index: number): void {
     if (this.terrain) {
-      this.aircraft.destroy(this.scene);
+      this.vehicle.destroy(this.scene);
       this.rings.dispose(this.scene);
       this.terrain.dispose(this.scene);
     }
@@ -128,12 +153,37 @@ class Game {
     this.stageIndex = index;
     this.explosion = null;
     this.terrain = new Terrain(this.scene, stage);
-    this.rings = new Rings(this.scene, stage.rings);
-    this.aircraft = new Aircraft(this.scene, this.terrain, stage.start, stage.fuel, stage.wind, (strength) =>
-      this.sound.touchdown(strength),
-    );
-    this.sound.setRolling(0, null);
+    this.rings = new Rings(this.scene, stage.rings, stage.kind === 'skydive');
+    this.vehicle =
+      stage.kind === 'flight'
+        ? new Aircraft(this.scene, this.terrain, stage.start, stage.fuel, stage.wind, (strength) =>
+            this.sound.touchdown(strength),
+          )
+        : new Skydiver(
+            this.scene,
+            this.terrain,
+            stage,
+            () => this.sound.parachute(),
+            () => this.sound.thud(),
+          );
+    this.applyMode(stage.kind);
+    this.stopLoops();
     this.updateCamera();
+  }
+
+  private applyMode(kind: StageConfig['kind']): void {
+    document.body.dataset.mode = kind;
+    this.fog.far = kind === 'skydive' ? 3000 : 1500;
+    this.lowAltitudeWarning.textContent = LOW_WARNINGS[kind];
+    for (const [action, label] of Object.entries(TOUCH_LABELS[kind])) {
+      const button = document.querySelector(`[data-action="${action}"]`);
+      if (button) button.textContent = label;
+    }
+  }
+
+  private stopLoops(): void {
+    this.sound.setRolling(0, null);
+    this.sound.setWind(0);
   }
 
   private startStage(index: number): void {
@@ -188,7 +238,7 @@ class Game {
       label: `♪ BGM: ${SONGS[this.songIndex].title}（${this.songIndex + 1}/${SONGS.length}）`,
       onSelect: () => this.nextSong(),
     });
-    this.showOverlay('menu', 'PILOT', ['リングをくぐって、滑走路に着陸しよう', 'Enter で最新のステージから'], buttons);
+    this.showOverlay('menu', 'PILOT', ['リングをくぐって、滑走路や的に降りよう', 'Enter で最新のステージから'], buttons);
     const latest = Math.min(this.progress.unlocked, STAGES.length) - 1;
     this.primaryAction = () => this.startStage(latest);
   }
@@ -202,10 +252,18 @@ class Game {
 
   private onCrash(): void {
     this.phase = 'crashed';
-    this.explosion = new Explosion(this.scene, this.aircraft.getPosition());
     this.sound.crash();
     this.music.setMode('off');
-    this.showOverlay('crash', '墜落！', ['Rキー または「もう一度」でやり直し'], [
+    let title = '墜落！';
+    const lines = ['Rキー または「もう一度」でやり直し'];
+    if (this.vehicle instanceof Aircraft) {
+      this.explosion = new Explosion(this.scene, this.vehicle.getPosition());
+    } else {
+      const [message, hint] = CRASH_MESSAGES[this.vehicle.getCrashCause() ?? 'no-chute'];
+      title = message;
+      lines.unshift(hint);
+    }
+    this.showOverlay('crash', title, lines, [
       { label: 'もう一度', onSelect: () => this.startStage(this.stageIndex) },
       { label: 'ステージをえらぶ', onSelect: () => this.showMenu() },
     ]);
@@ -216,8 +274,9 @@ class Game {
     this.music.setMode('off');
     this.sound.clear();
     const allRings = this.rings.passedCount === this.rings.total;
-    const onRunway = this.aircraft.isStoppedOnRunway();
-    const stars = 1 + (allRings ? 1 : 0) + (onRunway ? 1 : 0);
+    const vehicle = this.vehicle;
+    const precise = vehicle instanceof Aircraft ? vehicle.isStoppedOnRunway() : vehicle.isOnBullseye();
+    const stars = 1 + (allRings ? 1 : 0) + (precise ? 1 : 0);
     const i = this.stageIndex;
     this.progress.stars[i] = Math.max(this.progress.stars[i] ?? 0, stars);
     this.progress.unlocked = Math.max(this.progress.unlocked, Math.min(i + 2, STAGES.length));
@@ -227,7 +286,11 @@ class Game {
     const lines = [
       starText(stars),
       `リング ${this.rings.passedCount}/${this.rings.total}${allRings ? ' ★' : ''}`,
-      onRunway ? '滑走路の上でとまれた ★' : '滑走路からはみ出した',
+      vehicle instanceof Aircraft
+        ? precise
+          ? '滑走路の上でとまれた ★'
+          : '滑走路からはみ出した'
+        : `的の中心から ${vehicle.getTargetDistance().toFixed(1)}${precise ? ' ★' : '（まん中の赤に降りると ★）'}`,
     ];
     if (isLast) lines.push('全ステージクリア！ おめでとう！');
     lines.push(isLast ? '画面をタップしてステージ選択へ' : '画面をタップして次のステージへ');
@@ -257,8 +320,12 @@ class Game {
   }
 
   private updateCamera(): void {
-    const offset = new THREE.Vector3(0, 3, -15).applyEuler(this.aircraft.getRotation());
-    const position = this.aircraft.getPosition();
+    if (this.vehicle instanceof Skydiver) {
+      this.vehicle.placeCamera(this.camera);
+      return;
+    }
+    const offset = new THREE.Vector3(0, 3, -15).applyEuler(this.vehicle.getRotation());
+    const position = this.vehicle.getPosition();
     this.camera.position.copy(position).add(offset);
     this.camera.lookAt(position);
   }
@@ -271,26 +338,36 @@ class Game {
   }
 
   private updateHUD(): void {
-    const fuel = this.aircraft.getFuel();
+    const vehicle = this.vehicle;
     const wind = STAGES[this.stageIndex].wind;
     this.setText('stage', `${this.stageIndex + 1}/${STAGES.length}`);
     this.setText('rings', `${this.rings.passedCount}/${this.rings.total}`);
     this.setText('wind', Math.hypot(wind.x, wind.z) === 0 ? 'なし' : Math.hypot(wind.x, wind.z).toFixed(1));
-    this.setText('speed', this.aircraft.getSpeed().toFixed(1));
-    this.setText('throttle', (this.aircraft.getThrottle() * 100).toFixed(0));
-    this.setText('pitch', ((this.aircraft.getPitchAngle() * 180) / Math.PI).toFixed(1));
-    this.setText('roll', ((this.aircraft.getRollAngle() * 180) / Math.PI).toFixed(1));
-    this.setText('altitude', this.aircraft.getAltitude().toFixed(1));
+    this.setText('altitude', vehicle.getAltitude().toFixed(1));
+    if (vehicle instanceof Skydiver) {
+      this.setText('fall-speed', vehicle.getFallSpeed().toFixed(1));
+      this.setText('target', vehicle.getTargetDistance().toFixed(1));
+      this.setText('chute', vehicle.isDeployed() ? 'ひらいた' : 'まだ', vehicle.isDeployed() ? '#ffff00' : '#ff6600');
+      return;
+    }
+    const fuel = vehicle.getFuel();
+    this.setText('speed', vehicle.getSpeed().toFixed(1));
+    this.setText('throttle', (vehicle.getThrottle() * 100).toFixed(0));
+    this.setText('pitch', ((vehicle.getPitchAngle() * 180) / Math.PI).toFixed(1));
+    this.setText('roll', ((vehicle.getRollAngle() * 180) / Math.PI).toFixed(1));
     this.setText('fuel', fuel.toFixed(1), fuel <= 0 ? '#ff0000' : fuel < 20 ? '#ff6600' : '#ffff00');
   }
 
+  private isTooLow(): boolean {
+    const vehicle = this.vehicle;
+    if (this.phase !== 'playing') return false;
+    if (vehicle instanceof Skydiver) return vehicle.isFreefalling() && vehicle.getAltitude() < CHUTE_WARNING_ALTITUDE;
+    const position = vehicle.getPosition();
+    return vehicle.isFlying() && vehicle.getAltitude() < LOW_ALTITUDE && !this.terrain.isOnApproach(position.x, position.z);
+  }
+
   private updateLowAltitudeWarning(delta: number): void {
-    const position = this.aircraft.getPosition();
-    const tooLow =
-      this.phase === 'playing' &&
-      this.aircraft.isFlying() &&
-      this.aircraft.getAltitude() < LOW_ALTITUDE &&
-      !this.terrain.isOnApproach(position.x, position.z);
+    const tooLow = this.isTooLow();
     this.lowAltitudeWarning.hidden = !tooLow;
     if (!tooLow) {
       this.lowAltitudeAlertTimer = 0;
@@ -309,16 +386,21 @@ class Game {
     const delta = Math.min(this.timer.getDelta(), 0.1);
 
     if (this.phase === 'playing') {
-      this.aircraft.update(delta, this.input.getInputState());
-      const contact = this.aircraft.getGroundContact();
-      this.sound.setRolling(contact?.speed ?? 0, contact?.surface ?? null);
-      if (this.rings.update(this.aircraft.getPosition()) > 0) this.sound.ring();
+      const vehicle = this.vehicle;
+      vehicle.update(delta, this.input.getInputState());
+      if (vehicle instanceof Aircraft) {
+        const contact = vehicle.getGroundContact();
+        this.sound.setRolling(contact?.speed ?? 0, contact?.surface ?? null);
+      } else {
+        this.sound.setWind(vehicle.getWindNoise());
+      }
+      if (this.rings.update(vehicle.getPosition()) > 0) this.sound.ring();
 
-      if (this.aircraft.isCrashed()) {
-        this.sound.setRolling(0, null);
+      if (vehicle.isCrashed()) {
+        this.stopLoops();
         this.onCrash();
-      } else if (this.aircraft.isLanded()) {
-        this.sound.setRolling(0, null);
+      } else if (vehicle.isLanded()) {
+        this.stopLoops();
         this.onClear();
       }
       this.updateCamera();

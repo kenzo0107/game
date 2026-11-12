@@ -12,6 +12,7 @@ export class Sound {
   private ctx: AudioContext | null = null;
   private noise: AudioBuffer | null = null;
   private rolling: { gain: GainNode; filter: BiquadFilterNode } | null = null;
+  private wind: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private muted = readArcadeMute();
 
   constructor() {
@@ -103,6 +104,53 @@ export class Sound {
     const rough = surface === 'grass';
     this.rolling.gain.gain.setTargetAtTime(amount * (rough ? 0.35 : 0.18), t, 0.05);
     this.rolling.filter.frequency.setTargetAtTime((rough ? 250 : 500) + speed * (rough ? 30 : 70), t, 0.05);
+  }
+
+  public setWind(amount: number): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    if (!this.wind) {
+      if (amount === 0) return;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.Q.value = 0.7;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const source = this.noiseSource(ctx, true);
+      source.connect(filter).connect(gain).connect(ctx.destination);
+      source.start();
+      this.wind = { gain, filter };
+    }
+    const t = ctx.currentTime;
+    this.wind.gain.gain.setTargetAtTime(amount * 0.22, t, 0.2);
+    this.wind.filter.frequency.setTargetAtTime(300 + amount * 900, t, 0.2);
+  }
+
+  public parachute(): void {
+    const ctx = this.context();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2500, t);
+    filter.frequency.exponentialRampToValueAtTime(300, t + 0.5);
+    const flap = this.noiseSource(ctx);
+    flap.connect(filter).connect(this.envelope(ctx, 0.5, 0.02, 0.5));
+    flap.start(t, Math.random());
+    flap.stop(t + 0.6);
+  }
+
+  public thud(): void {
+    const ctx = this.context();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400;
+    const step = this.noiseSource(ctx);
+    step.connect(filter).connect(this.envelope(ctx, 0.4, 0.01, 0.25));
+    step.start(t, Math.random());
+    step.stop(t + 0.3);
   }
 
   public crash(): void {

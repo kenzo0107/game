@@ -5,19 +5,31 @@ export interface Placement {
   heading: number;
 }
 
-export interface StageConfig {
+interface StageBase {
   name: string;
   description: string;
   island: { x: number; z: number; width: number; depth: number };
-  runway: { x: number; z: number; heading: number; width: number; length: number };
   start: Placement;
   wind: { x: number; z: number };
-  fuel: number;
   rings: Placement[];
 }
 
+export interface FlightStage extends StageBase {
+  kind: 'flight';
+  runway: { x: number; z: number; heading: number; width: number; length: number };
+  fuel: number;
+}
+
+export interface SkydiveStage extends StageBase {
+  kind: 'skydive';
+  target: { x: number; z: number; radius: number };
+}
+
+export type StageConfig = FlightStage | SkydiveStage;
+
 export const STAGES: StageConfig[] = [
   {
+    kind: 'flight',
     name: 'はじめての着陸',
     description: 'まっすぐ先の滑走路へ。リングをくぐりながら、ゆっくり降りよう',
     island: { x: 0, z: 300, width: 300, depth: 400 },
@@ -32,6 +44,7 @@ export const STAGES: StageConfig[] = [
     ],
   },
   {
+    kind: 'flight',
     name: 'まがって着陸',
     description: '滑走路は右ななめ前。機体をかたむけて右へ曲がろう',
     island: { x: 0, z: 300, width: 300, depth: 400 },
@@ -46,6 +59,7 @@ export const STAGES: StageConfig[] = [
     ],
   },
   {
+    kind: 'flight',
     name: 'みじかい滑走路',
     description: '滑走路がせまくて短い。着陸したら 減速(S) でブレーキ',
     island: { x: 0, z: 320, width: 260, depth: 360 },
@@ -60,6 +74,7 @@ export const STAGES: StageConfig[] = [
     ],
   },
   {
+    kind: 'flight',
     name: 'よこかぜ',
     description: '右から風がふいている。流されないように向きを直そう',
     island: { x: 0, z: 300, width: 300, depth: 400 },
@@ -74,6 +89,7 @@ export const STAGES: StageConfig[] = [
     ],
   },
   {
+    kind: 'flight',
     name: 'ちいさな島',
     description: '海にうかぶ小さな島。左からの風と燃料に気をつけて',
     island: { x: -120, z: 380, width: 120, depth: 200 },
@@ -85,6 +101,21 @@ export const STAGES: StageConfig[] = [
       { x: -293, y: -3, z: -298, heading: 0.25 },
       { x: -231, y: -21, z: -56, heading: 0.25 },
       { x: -182, y: -36, z: 138, heading: 0.25 },
+    ],
+  },
+  {
+    kind: 'skydive',
+    name: 'スカイダイビング',
+    description: '飛行機からジャンプ！ リングをくぐり、パラシュートを開いて的に降りよう',
+    island: { x: 0, z: 0, width: 320, depth: 320 },
+    target: { x: 0, z: 0, radius: 28 },
+    start: { x: 30, y: 550, z: -260, heading: 0 },
+    wind: { x: 0.8, z: 0 },
+    rings: [
+      { x: 30, y: 440, z: -245, heading: 0 },
+      { x: 10, y: 360, z: -205, heading: 0 },
+      { x: -15, y: 280, z: -165, heading: 0 },
+      { x: 0, y: 200, z: -120, heading: 0 },
     ],
   },
 ];

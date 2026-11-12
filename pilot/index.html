@@ -65,6 +65,10 @@
     #touch-controls {
       display: none;
     }
+    body:not([data-mode="skydive"]) .skydive-only,
+    body[data-mode="skydive"] .flight-only {
+      display: none !important;
+    }
     @media (pointer: coarse) {
       #info {
         display: none;
@@ -115,6 +119,11 @@
       color: white;
       font-size: 13px;
       font-weight: bold;
+    }
+    #buttons .deploy {
+      grid-column: span 2;
+      border-radius: 32px;
+      background: rgba(230, 60, 40, 0.6);
     }
     #buttons button.pressed {
       background: rgba(255, 255, 255, 0.5);
@@ -267,12 +276,19 @@
     <div>ステージ: <span id="stage">1</span></div>
     <div>リング: <span id="rings">0</span></div>
     <div>風: <span id="wind">なし</span></div>
-    <div>燃料: <span id="fuel">100</span>%</div>
-    <div>速度: <span id="speed">0</span></div>
-    <div>スロットル: <span id="throttle">0</span>%</div>
-    <div>ピッチ角: <span id="pitch">0</span>°</div>
-    <div>ロール角: <span id="roll">0</span>°</div>
     <div>高度: <span id="altitude">0</span></div>
+    <div class="flight-only">
+      <div>燃料: <span id="fuel">100</span>%</div>
+      <div>速度: <span id="speed">0</span></div>
+      <div>スロットル: <span id="throttle">0</span>%</div>
+      <div>ピッチ角: <span id="pitch">0</span>°</div>
+      <div>ロール角: <span id="roll">0</span>°</div>
+    </div>
+    <div class="skydive-only">
+      <div>落下速度: <span id="fall-speed">0</span></div>
+      <div>的まで: <span id="target">0</span></div>
+      <div>パラシュート: <span id="chute">まだ</span></div>
+    </div>
   </div>
   <div id="touch-controls">
     <div id="stick"><div id="stick-knob"></div></div>
@@ -281,10 +297,11 @@
       <button type="button" data-action="throttleUp">加速</button>
       <button type="button" data-action="yawLeft">機首←</button>
       <button type="button" data-action="yawRight">機首→</button>
+      <button type="button" class="deploy skydive-only" data-action="deploy">パラシュート</button>
     </div>
   </div>
   <div id="banner" aria-live="polite"></div>
-  <div id="low-altitude" role="alert" hidden>⚠ 高度が低すぎる！ 機首を上げよう</div>
+  <div id="low-altitude" role="alert" hidden></div>
   <div id="overlay" hidden></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
