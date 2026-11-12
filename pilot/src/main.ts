@@ -6,6 +6,7 @@ import { InputController } from './input';
 import { Explosion } from './explosion';
 import { Terrain } from './terrain';
 import { Rings } from './rings';
+import { Music } from './music';
 import { Sound } from './sound';
 import { STAGES } from './stages';
 
@@ -51,6 +52,7 @@ class Game {
   private timer = new THREE.Timer();
   private input = new InputController();
   private sound = new Sound();
+  private music = new Music(() => this.sound.existingContext());
   private overlay = document.getElementById('overlay') as HTMLElement;
   private banner = document.getElementById('banner') as HTMLElement;
   private progress = loadProgress();
@@ -105,6 +107,7 @@ class Game {
   private startStage(index: number): void {
     this.loadStage(index);
     this.phase = 'playing';
+    this.music.setMode('flight');
     this.hideOverlay();
     const stage = STAGES[index];
     this.banner.replaceChildren(
@@ -138,6 +141,7 @@ class Game {
 
   private showMenu(): void {
     this.phase = 'menu';
+    this.music.setMode('menu');
     this.banner.classList.remove('show');
     const buttons = STAGES.map((stage, i) => {
       const locked = i + 1 > this.progress.unlocked;
@@ -157,6 +161,7 @@ class Game {
     this.phase = 'crashed';
     this.explosion = new Explosion(this.scene, this.aircraft.getPosition());
     this.sound.crash();
+    this.music.setMode('off');
     this.showOverlay('crash', '墜落！', ['Rキー または「もう一度」でやり直し'], [
       { label: 'もう一度', onSelect: () => this.startStage(this.stageIndex) },
       { label: 'ステージをえらぶ', onSelect: () => this.showMenu() },
@@ -166,6 +171,7 @@ class Game {
   private onClear(): void {
     this.phase = 'cleared';
     this.sound.clear();
+    this.music.setMode('menu');
     const allRings = this.rings.passedCount === this.rings.total;
     const onRunway = this.aircraft.isStoppedOnRunway();
     const stars = 1 + (allRings ? 1 : 0) + (onRunway ? 1 : 0);

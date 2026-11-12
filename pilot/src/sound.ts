@@ -34,6 +34,10 @@ export class Sound {
     return this.ctx;
   }
 
+  public existingContext(): AudioContext | null {
+    return this.muted ? null : this.ctx;
+  }
+
   private noiseSource(ctx: AudioContext, loop = false): AudioBufferSourceNode {
     const source = ctx.createBufferSource();
     source.buffer = this.noise;
