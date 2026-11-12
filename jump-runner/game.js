@@ -7,6 +7,8 @@ let ctx = screenCtx;
 
 const WORLD_HEIGHT = 400;
 const GROUND_Y = 360;
+// 奥行きを出すため、キャラは地面の線より下の草の帯を走る。坂はこの高さから立ち上げ、足が坂の線に乗るようにする
+const RUN_LINE_Y = 388;
 const SKY_COLOR = '#87CEEB';
 const HOLE_FALL_DEPTH = 12;
 // 縦持ちでもキャラが小さくなりすぎないよう、横方向に見える範囲はこの幅まで狭める
@@ -137,6 +139,7 @@ class Player {
 
     startSlide() {
         this.slideTimer = 40;
+        if (this.isOn('slope_down')) comicSfx(this.x + this.width + 10, this.y - 6, 'シャーッ!', '#B3E5FC', 14, 30);
         this.stretch(1.25, 0.8);
         landingDust(this.x + this.width / 2, this.feetY);
         comicSfx(this.x + this.width + 18, this.feetY - 14, 'ズザッ!', '#FFB74D', 13, 24);
@@ -156,6 +159,10 @@ class Player {
         return obstacles.some((o) => o.type === 'gate' && checkCollision(this, o));
     }
 
+    isOn(type) {
+        return !this.isJumping && obstacles.some((o) => o.type === type && o.canStandOn(this).canStand);
+    }
+
     // 戻り値は、直後の下スワイプで取り消すための情報
     jump() {
         if (!this.alive) return null;
@@ -166,12 +173,18 @@ class Player {
         // 地上からのジャンプ
         if (!this.isJumping) {
             const undo = { kind: 'ground', y: this.y, frame: this.animationFrame };
+            const onRamp = this.isOn('slope_up');
             this.velocityY = this.jumpPower;
             this.isJumping = true;
             this.doubleJumpUsed = false;
             this.stretch(0.75, 1.3);
             landingDust(this.x + this.width / 2, this.feetY);
-            comicSfx(this.x - 8, this.feetY - 8, 'ピョン!', '#FFFFFF', 13, 22);
+            if (onRamp) {
+                jumpRing(this.x + this.width / 2, this.feetY);
+                comicSfx(this.x - 8, this.feetY - 8, 'ビヨーン!', '#FFD54F', 15, 26);
+            } else {
+                comicSfx(this.x - 8, this.feetY - 8, 'ピョン!', '#FFFFFF', 13, 22);
+            }
             playJumpSound();
             return undo;
         }
@@ -220,7 +233,7 @@ class Player {
         let currentGroundY = this.groundY - terrainHeightAt(this.x + this.width / 2);
         if (obstacles.some((o) => o.isHoleUnder(this))) currentGroundY = Infinity;
         for (const obstacle of obstacles) {
-            const result = obstacle.canStandOn(this.x, this.y, this.width, this.height);
+            const result = obstacle.canStandOn(this);
             if (result.canStand) {
                 currentGroundY = result.groundY;
                 break;
@@ -259,7 +272,8 @@ class Player {
             this.runPhase += 0.18 + gameSpeed * 0.04;
             if (this.sliding) {
                 // ゲートの下で起き上がると押し戻されるため、くぐり終えるまでは姿勢を保つ
-                if (!this.isUnderGate()) this.slideTimer--;
+                // 下り坂は坂の終わりまで滑り降り、ふもとの敵をはね飛ばせるようにする
+                if (!this.isUnderGate() && !this.isOn('slope_down')) this.slideTimer--;
                 if (this.animationFrame % 2 === 0) runDust(this.x + this.width, this.feetY - 2);
             } else if (this.isPlayer && this.animationFrame % 6 === 0) {
                 runDust(this.x + 4, this.feetY);
@@ -512,6 +526,10 @@ class Obstacle {
         return GROUND_Y - this.lift;
     }
 
+    get runLineY() {
+        return RUN_LINE_Y - this.lift;
+    }
+
     update() {
         this.x -= gameSpeed;
     }
@@ -553,29 +571,26 @@ class Obstacle {
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 3;
             ctx.strokeRect(this.x, this.y, this.width, this.height);
-        } else if (this.type === 'slope_up') {
-            // 登り坂
-            ctx.fillStyle = '#4169E1';
+        } else if (this.type === 'slope_up' || this.type === 'slope_down') {
+            const up = this.type === 'slope_up';
+            const highX = up ? this.x + this.width : this.x;
+            const lowX = up ? this.x : this.x + this.width;
+            const topY = this.runLineY - this.height;
+            const grass = ctx.createLinearGradient(0, topY, 0, this.runLineY);
+            grass.addColorStop(0, '#7ED87E');
+            grass.addColorStop(1, '#90EE90');
+            ctx.fillStyle = grass;
             ctx.beginPath();
-            ctx.moveTo(this.x, this.baseY);
-            ctx.lineTo(this.x + this.width, this.y);
-            ctx.lineTo(this.x + this.width, this.baseY);
+            ctx.moveTo(lowX, this.runLineY);
+            ctx.lineTo(highX, topY);
+            ctx.lineTo(highX, this.runLineY);
             ctx.closePath();
             ctx.fill();
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        } else if (this.type === 'slope_down') {
-            // 下り坂
-            ctx.fillStyle = '#4169E1';
+            ctx.strokeStyle = '#2E7D32';
+            ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.x + this.width, this.baseY);
-            ctx.lineTo(this.x, this.baseY);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 2;
+            ctx.moveTo(lowX, this.runLineY);
+            ctx.lineTo(highX, topY);
             ctx.stroke();
         } else if (this.type === 'gate') {
             const top = view.top - 10;
@@ -617,22 +632,16 @@ class Obstacle {
     }
 
     // 坂道や段差の上に乗れるかチェック
-    canStandOn(playerX, playerY, playerWidth, playerHeight) {
+    canStandOn(character) {
         if (this.type === 'slope_up' || this.type === 'slope_down' || this.type === 'step') {
-            const playerBottom = playerY + playerHeight;
-            const playerCenterX = playerX + playerWidth / 2;
+            const playerCenterX = character.x + character.width / 2;
 
             if (playerCenterX >= this.x && playerCenterX <= this.x + this.width) {
-                if (this.type === 'slope_up') {
-                    // 登り坂の高さ計算
+                if (this.type === 'slope_up' || this.type === 'slope_down') {
                     const progress = (playerCenterX - this.x) / this.width;
-                    const slopeTop = this.baseY - (this.height * progress);
-                    return { canStand: true, groundY: slopeTop };
-                } else if (this.type === 'slope_down') {
-                    // 下り坂の高さ計算
-                    const progress = (playerCenterX - this.x) / this.width;
-                    const slopeTop = this.y + (this.height * progress);
-                    return { canStand: true, groundY: slopeTop };
+                    const rise = this.type === 'slope_up' ? progress : 1 - progress;
+                    const feetToTop = character.feetY - character.y;
+                    return { canStand: true, groundY: this.runLineY - this.height * rise - feetToTop };
                 } else if (this.type === 'step') {
                     // 段差の上
                     return { canStand: true, groundY: this.y };
@@ -1638,6 +1647,26 @@ function spawnCoinArc(obstacle) {
         const x = obstacle.x - 30 + t * (obstacle.width + 60);
         coins.push(new Coin(x, obstacle.baseY - 40 - Math.sin(t * Math.PI) * 110));
     }
+}
+
+// 坂の上のほうで踏み切ったときの軌道の頂上付近に並べ、平地からのジャンプでは届かない高さにする
+function spawnRampCoins(ramp) {
+    const g = player.gravity;
+    const v = -player.jumpPower;
+    const takeoffX = ramp.x + ramp.width * 0.75;
+    const centerY = ramp.runLineY - ramp.height * 0.75 - (player.feetY - player.y) + player.height / 2;
+    const speed = gameSpeed + (0.002 * (takeoffX - player.x - player.width / 2)) / gameSpeed;
+    for (const t of [16, 20, 25, 30, 34]) {
+        coins.push(new Coin(takeoffX + speed * t - 8, centerY - (v * t - (g * t * t) / 2) - 8));
+    }
+}
+
+// 歩く敵は坂より速く近づくため、坂のふもとがプレイヤーに届くころに出会う位置から歩かせる
+function spawnWalkerAtFoot(slope) {
+    const walker = new Enemy('walker');
+    const footDistance = slope.x + slope.width - (player.x + player.width / 2);
+    walker.x = player.x + player.width + (footDistance * walker.speed) / gameSpeed;
+    enemies.push(walker);
 }
 
 function spawnCoinRow() {
@@ -2674,15 +2703,24 @@ function tick() {
                 type = 'gate';
             } else if (rand < 0.8) {
                 type = 'slope_up';
-            } else if (rand < 0.9) {
-                type = 'slope_down';
+            } else if (rand < 0.9 && isTerrainFlat(view.width, view.width + 360 + 40 * gameSpeed)) {
+                type = 'hill';
             } else {
                 type = 'step';
             }
-            const obstacle = new Obstacle(type);
+            const obstacle = new Obstacle(type === 'hill' ? 'slope_up' : type);
             obstacles.push(obstacle);
             if ((type === 'hole' || type === 'block') && Math.random() < 0.6) {
                 spawnCoinArc(obstacle);
+            } else if (type === 'slope_up') {
+                spawnRampCoins(obstacle);
+            } else if (type === 'hill') {
+                // 下り坂だけを置くと左端が崖になり、差し掛かった瞬間に頂上へ移動してしまうため、登り坂から続けて置く
+                const downhill = new Obstacle('slope_down');
+                downhill.x = obstacle.x + obstacle.width;
+                obstacles.push(downhill);
+                spawnRampCoins(obstacle);
+                if (Math.random() < 0.6) spawnWalkerAtFoot(downhill);
             } else if (type === 'gate' && Math.random() < 0.6) {
                 for (let c = 0; c < 4; c++) coins.push(new Coin(obstacle.x - 40 + c * 34, 362 - obstacle.lift));
             }
