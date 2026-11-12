@@ -1,7 +1,10 @@
 const BOSS_ROSTER = [
     { kind: 'tsuno', name: 'ツノダイマオウ', color: '#FF5252', taunt: 'このタネは わたさんぞ!', reply: 'かえしてもらうぜ!' },
     { kind: 'mecha', name: 'メカ・モンバン', color: '#FFA726', taunt: 'ココハ トオサナイ', reply: 'とおらせてもらうぜ!' },
+    { kind: 'golem', name: 'ドスドスゴーレム', color: '#FFEE58', taunt: 'ゴゴゴ… ふみつぶして やる', reply: 'ふみつけて やるぜ!' },
     { kind: 'mole', name: 'アナホリモグーラ', color: '#66BB6A', taunt: 'タネは ちかに かくしたモグ!', reply: 'ほりだしてやる!' },
+    { kind: 'rival', name: 'ライバル・アカボシ', color: '#29B6F6', taunt: 'タネが ほしけりゃ おいついてみな!', reply: 'まけないぜ!' },
+    { kind: 'whale', name: 'クモノクジラ', color: '#3F51B5', taunt: 'くもの うえまで こられるかな~', reply: 'はねで とんでいくぜ!' },
     { kind: 'kage', name: 'カゲノオウ', color: '#AB47BC', taunt: 'すべての いろは わがものだ…', reply: 'みんなの いろを かえせ!' },
 ];
 

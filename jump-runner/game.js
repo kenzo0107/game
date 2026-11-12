@@ -1474,6 +1474,74 @@ class LaserHazard {
     }
 }
 
+class ShockwaveHazard {
+    constructor(x, color = '#FFD54F') {
+        this.x = x;
+        this.color = color;
+        this.speed = 4.5;
+        this.harmless = false;
+        this.done = false;
+    }
+
+    update() {
+        this.x -= this.speed;
+        if (this.x < -60) this.done = true;
+    }
+
+    zone() {
+        const floor = playerFloorY();
+        return { x: this.x, y: floor + 12, width: 34, height: 18 };
+    }
+
+    draw() {
+        const floor = playerFloorY() + 30;
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 2;
+        for (let k = 0; k < 3; k++) {
+            const h = 26 - k * 7;
+            ctx.beginPath();
+            ctx.moveTo(this.x + k * 12, floor);
+            ctx.quadraticCurveTo(this.x + k * 12 + 6, floor - h * 1.6, this.x + k * 12 + 20, floor);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+}
+
+class ShadowCloneHazard {
+    constructor(x) {
+        this.body = new Player(x, 0, false, 'enemy');
+        this.harmless = false;
+        this.done = false;
+        this.speed = 5;
+    }
+
+    update() {
+        const body = this.body;
+        body.x -= this.speed;
+        body.y = playerFloorY();
+        body.runPhase += 0.4;
+        if (body.x < -60) this.done = true;
+    }
+
+    zone() {
+        return this.body;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.body.x * 2 + this.body.width, 0);
+        ctx.scale(-1, 1);
+        ctx.globalAlpha = 0.85;
+        // 未対応のブラウザでは赤い走者のまま描かれるだけで、遊ぶうえでは困らない
+        ctx.filter = 'brightness(0.25)';
+        this.body.draw();
+        ctx.restore();
+    }
+}
+
 function digHoleAt(x) {
     const hole = new Obstacle('hole');
     hole.x = x - hole.width / 2;
@@ -1491,6 +1559,403 @@ class MechaBoss extends Boss {
         }
         this.hazards.push(new LaserHazard(this, Math.random() < 0.5 ? 'low' : 'high'));
         this.attackCooldown = LASER_WARN_TICKS + LASER_FIRE_TICKS + 30;
+    }
+}
+
+const GOLEM_HOME_POUNDS = 2;
+
+// プレイヤーは横に動けず、画面の右側にいるボスには届かないため、ときどき歩いて迫らせて踏む機会を作る
+class GolemBoss extends Boss {
+    constructor(profile, level) {
+        super(profile, level);
+        this.width = 90;
+        this.height = 90;
+        this.homeX = view.width - 170;
+        this.x = this.homeX;
+        this.state = 'home';
+        this.stateTimer = 0;
+        this.pounds = 0;
+        this.jumpY = 0;
+        this.jumpVelocity = 0;
+        this.placeBody();
+    }
+
+    placeBody() {
+        this.y = RUN_LINE_Y - 3 - terrainHeightAt(this.x + this.width / 2) - this.height - this.jumpY;
+    }
+
+    enter(state) {
+        this.state = state;
+        this.stateTimer = 0;
+    }
+
+    act() {
+        const t = ++this.stateTimer;
+        if (this.state === 'home') {
+            this.x = this.homeX;
+            if (this.fighting && t > 90) {
+                if (this.pounds >= GOLEM_HOME_POUNDS) {
+                    this.pounds = 0;
+                    say(this, 'ドス ドス ドス!', 50);
+                    this.enter('charge');
+                } else {
+                    this.enter('crouch');
+                }
+            }
+        } else if (this.state === 'crouch') {
+            if (t >= 20) {
+                this.jumpVelocity = 9;
+                this.enter('air');
+            }
+        } else if (this.state === 'air') {
+            this.jumpY += this.jumpVelocity;
+            this.jumpVelocity -= 0.5;
+            if (this.jumpY <= 0) this.land();
+        } else if (this.state === 'charge') {
+            this.x -= 2.2 + this.level * 0.05;
+            if (this.x + this.width < -10) {
+                this.x = view.width + 20;
+                this.enter('return');
+            }
+        } else if (this.state === 'return') {
+            this.x -= 2;
+            if (this.x <= this.homeX) this.enter('home');
+        } else if (this.state === 'retreat') {
+            this.x += 5;
+            if (this.x >= this.homeX) this.enter('home');
+        }
+        this.placeBody();
+    }
+
+    land() {
+        this.jumpY = 0;
+        this.pounds++;
+        shakeScreen(10);
+        smokePuffs(this.x + this.width / 2, this.y + this.height, 8, 1.4);
+        comicSfx(this.x + this.width / 2, this.y - 10, 'ドスーン!', '#FFD54F', 22, 34);
+        playStompSound();
+        this.hazards.push(new ShockwaveHazard(this.x - 30));
+        this.enter('home');
+    }
+
+    onStomped() {
+        say(this, 'ゴゴッ!?', 50);
+        this.enter('retreat');
+    }
+
+    onShieldHit() {
+        this.enter('retreat');
+    }
+
+    get harmsOnTouch() {
+        return this.state !== 'retreat';
+    }
+
+    get stompable() {
+        return this.invincibleTimer === 0 && this.state !== 'retreat';
+    }
+
+    drawBody() {
+        const { x, y, width: w, height: h } = this;
+        const squash = this.state === 'crouch' ? 8 : 0;
+        const step = this.state === 'charge' || this.state === 'return' ? Math.sin(this.animationOffset * 3) * 3 : 0;
+        const top = y + squash;
+        ctx.fillStyle = '#9E9E9E';
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 3;
+        ctx.fillRect(x + 6, top + 20, w - 12, h - 20 - squash);
+        ctx.strokeRect(x + 6, top + 20, w - 12, h - 20 - squash);
+        ctx.fillStyle = '#BDBDBD';
+        ctx.fillRect(x + 16, top, w - 32, 30);
+        ctx.strokeRect(x + 16, top, w - 32, 30);
+        ctx.fillStyle = '#66BB6A';
+        ctx.fillRect(x + 16, top, w - 32, 6);
+        ctx.fillStyle = '#FFEE58';
+        ctx.fillRect(x + 26, top + 10, 12, 8);
+        ctx.fillRect(x + w - 38, top + 10, 12, 8);
+        ctx.fillStyle = '#757575';
+        ctx.fillRect(x - 6, top + 30 + step, 14, 40);
+        ctx.fillRect(x + w - 8, top + 30 - step, 14, 40);
+        ctx.strokeRect(x - 6, top + 30 + step, 14, 40);
+        ctx.strokeRect(x + w - 8, top + 30 - step, 14, 40);
+        ctx.strokeStyle = '#616161';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + 30, top + 40);
+        ctx.lineTo(x + 40, top + 55);
+        ctx.lineTo(x + 34, top + 70);
+        ctx.moveTo(x + 60, top + 45);
+        ctx.lineTo(x + 54, top + 60);
+        ctx.stroke();
+    }
+}
+
+const RIVAL_SCALE = 1.5;
+
+// ゴーレムと同じく、体当たりで近づいてきたときだけ踏めるようにする
+class RivalBoss extends Boss {
+    constructor(profile, level) {
+        super(profile, level);
+        this.width = 30 * RIVAL_SCALE;
+        this.height = 30 * RIVAL_SCALE;
+        this.homeX = view.width * 0.62;
+        this.x = this.homeX;
+        this.body = new Player(0, 0, false, 'enemy');
+        this.state = 'run';
+        this.stateTimer = 0;
+        this.attackInterval = Math.max(90 - level * 5, 50);
+        this.placeBody();
+    }
+
+    placeBody() {
+        this.y = RUN_LINE_Y - 8 - terrainHeightAt(this.x + this.width / 2) - this.height;
+    }
+
+    enter(state) {
+        this.state = state;
+        this.stateTimer = 0;
+    }
+
+    act() {
+        const t = ++this.stateTimer;
+        this.body.runPhase += this.state === 'dash' ? 0.6 : 0.3;
+        if (this.state === 'run') {
+            this.x = this.homeX + Math.sin(this.animationOffset) * 20;
+            if (this.attackCooldown > 0) {
+                this.attackCooldown--;
+            } else if (this.fighting) {
+                this.attackCooldown = this.attackInterval;
+                if (Math.random() < 0.5) this.dropBlock();
+                else this.enter('windup');
+            }
+        } else if (this.state === 'windup') {
+            if (t === 1) {
+                addMark(this, '!', 40);
+                say(this, 'いくぜ!', 40);
+            }
+            if (t >= 45) this.enter('dash');
+        } else if (this.state === 'dash') {
+            this.x -= 5;
+            if (t % 8 === 0) runDust(this.x + this.width, this.y + this.height);
+            if (this.x + this.width < -20) {
+                this.x = view.width + 30;
+                this.enter('return');
+            }
+        } else if (this.state === 'return') {
+            this.x -= 3;
+            if (this.x <= this.homeX) this.enter('run');
+        } else if (this.state === 'retreat') {
+            this.x += 6;
+            if (this.x >= this.homeX) this.enter('run');
+        }
+        this.placeBody();
+    }
+
+    dropBlock() {
+        const block = new Obstacle('block');
+        block.x = this.x;
+        block.lift = terrainHeightAt(block.x);
+        block.y = 310 - block.lift;
+        obstacles.push(block);
+        comicSfx(this.x, this.y - 10, 'ポイッ', '#FFFFFF', 14, 24);
+    }
+
+    onStomped() {
+        say(this, 'くっ…やるな!', 50);
+        this.enter('retreat');
+    }
+
+    onShieldHit() {
+        this.enter('retreat');
+    }
+
+    get harmsOnTouch() {
+        return this.state !== 'retreat';
+    }
+
+    get stompable() {
+        return this.invincibleTimer === 0 && this.state !== 'retreat';
+    }
+
+    drawBody() {
+        ctx.save();
+        ctx.translate(this.x + this.width, this.y);
+        ctx.scale(-RIVAL_SCALE, RIVAL_SCALE);
+        this.body.draw();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 2, 30, 4);
+        ctx.fillStyle = '#29B6F6';
+        starPath(15, -4, 7, 3);
+        ctx.fill();
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+const WHALE_WING_INTERVAL = 240;
+
+// 空高くにいて二段ジャンプでしか背中に届かないため、戦いの間は羽アイテムを流し続ける
+class WhaleBoss extends Boss {
+    constructor(profile, level) {
+        super(profile, level);
+        this.width = 150;
+        this.height = 60;
+        this.baseY = 145;
+        this.y = this.baseY;
+        this.phase = 0;
+        this.wingTimer = WHALE_WING_INTERVAL - 30;
+    }
+
+    act() {
+        const left = 30;
+        const right = Math.max(view.width - this.width - 20, left);
+        if (this.fighting) this.phase += 0.006 + this.level * 0.0005;
+        this.x = left + (right - left) * (0.5 + 0.5 * Math.cos(this.phase));
+        this.y = this.baseY + Math.sin(this.animationOffset) * 12;
+
+        if (this.attackCooldown > 0) {
+            this.attackCooldown--;
+        } else if (this.fighting && Math.random() < 0.02) {
+            this.attackCooldown = this.attackInterval;
+            this.spray();
+        }
+
+        if (this.fighting && !player.hasDoubleJump && ++this.wingTimer >= WHALE_WING_INTERVAL && !items.some((i) => i.type === 'wing')) {
+            this.wingTimer = 0;
+            items.push(new Item('wing'));
+        }
+    }
+
+    spray() {
+        const spoutX = this.x + this.width * 0.35;
+        comicSfx(spoutX, this.y - 30, 'プシュー!', '#4FC3F7', 16, 26);
+        for (let k = 0; k < 3; k++) {
+            const drop = new Bullet(spoutX, this.y);
+            drop.setArcVelocity(-2.5 + k * 1.8, -6);
+            drop.gravity = 0.25;
+            bullets.push(drop);
+        }
+    }
+
+    onStomped() {
+        smokePuffs(this.x + this.width * 0.35, this.y, 6, 1);
+        say(this, 'クジラ~ン!', 40);
+    }
+
+    get harmsOnTouch() {
+        return false;
+    }
+
+    get stompable() {
+        return this.invincibleTimer === 0;
+    }
+
+    drawBody() {
+        const { x, y, width: w, height: h } = this;
+        const tail = Math.sin(this.animationOffset * 2) * 6;
+        ctx.fillStyle = '#3F51B5';
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x + w - 10, y + h / 2);
+        ctx.lineTo(x + w + 25, y + h / 2 - 18 + tail);
+        ctx.lineTo(x + w + 25, y + h / 2 + 14 + tail);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#C5CAE9';
+        ctx.beginPath();
+        ctx.ellipse(x + w / 2, y + h * 0.75, w * 0.4, h * 0.22, 0, 0, Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#FFF';
+        ctx.beginPath();
+        ctx.arc(x + 30, y + h * 0.4, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(x + 28, y + h * 0.4, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        for (let k = 0; k < 3; k++) {
+            ctx.beginPath();
+            ctx.arc(x + 30 + k * 40, y + h + 12 + (k % 2) * 4, 14, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
+const KAGE_MAX_HP = 6;
+const KAGE_RAGE_HP = 3;
+const KAGE_MOVES = ['laser', 'wave', 'hole', 'rain', 'clone'];
+
+// 倒す手段は最初のボスと同じ爆弾の跳ね返しなので、技の合間に必ず爆弾を挟み、爆弾が来ないまま詰むことがないようにする
+class KageBoss extends Boss {
+    constructor(profile, level) {
+        super(profile, level);
+        this.maxHp = KAGE_MAX_HP;
+        this.hp = this.maxHp;
+        this.moveIndex = 0;
+        this.bombNext = true;
+        this.raging = false;
+    }
+
+    shoot() {
+        if (this.bombNext) {
+            bombs.push(new Bomb(this.x, this.y + this.height / 2));
+        } else {
+            this.useMove(KAGE_MOVES[this.moveIndex++ % KAGE_MOVES.length]);
+        }
+        this.bombNext = !this.bombNext;
+        if (this.raging) this.attackCooldown = Math.floor(this.attackCooldown * 0.6);
+    }
+
+    useMove(move) {
+        if (move === 'laser') {
+            this.hazards.push(new LaserHazard(this, Math.random() < 0.5 ? 'low' : 'high'));
+            this.attackCooldown = LASER_WARN_TICKS + LASER_FIRE_TICKS + 20;
+        } else if (move === 'wave') {
+            this.hazards.push(new ShockwaveHazard(this.x - 30, '#CE93D8'));
+            shakeScreen(8);
+        } else if (move === 'hole') {
+            digHoleAt(Math.min(player.x + 320, view.width - 60));
+            comicSfx(player.x + 320, GROUND_Y - 30, 'ズボッ', '#CE93D8', 16, 26);
+        } else if (move === 'rain') {
+            for (let k = 0; k < 4; k++) {
+                const drop = new Bullet(this.x + 20, this.y);
+                drop.setArcVelocity(-1.5 - k * 1.3, -7);
+                drop.gravity = 0.3;
+                bullets.push(drop);
+            }
+        } else if (move === 'clone') {
+            this.hazards.push(new ShadowCloneHazard(this.x));
+            say(this, 'わが ぶんしんよ!', 50);
+        }
+    }
+
+    takeDamage() {
+        const defeated = super.takeDamage();
+        if (!defeated && !this.raging && this.hp <= KAGE_RAGE_HP) {
+            this.raging = true;
+            this.speed *= 1.4;
+            say(this, 'ほんきを だすぞ…!', 80);
+            shakeScreen(12);
+        }
+        return defeated;
+    }
+
+    drawBody() {
+        super.drawBody();
+        if (!this.raging) return;
+        ctx.strokeStyle = '#FF1744';
+        ctx.lineWidth = 3;
+        const pulse = 6 + Math.sin(this.animationOffset * 4) * 3;
+        ctx.strokeRect(this.x - pulse, this.y - pulse, this.width + pulse * 2, this.height + pulse * 2);
     }
 }
 
@@ -1661,7 +2126,7 @@ class MoleBoss extends Boss {
     }
 }
 
-const BOSS_CLASSES = { mecha: MechaBoss, mole: MoleBoss };
+const BOSS_CLASSES = { mecha: MechaBoss, golem: GolemBoss, mole: MoleBoss, rival: RivalBoss, whale: WhaleBoss, kage: KageBoss };
 
 function createBoss(profile, level) {
     const BossClass = BOSS_CLASSES[profile.kind] || Boss;
