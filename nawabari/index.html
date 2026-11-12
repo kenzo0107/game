@@ -34,32 +34,25 @@
         .app {
             height: 100%;
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: auto minmax(0, 1fr) minmax(140px, 24%);
-            grid-template-areas:
-                "hud hud"
-                "field field"
-                "special stick";
-            gap: 6px;
+            grid-template: minmax(0, 1fr) / minmax(0, 1fr);
             padding:
-                max(8px, env(safe-area-inset-top))
-                max(8px, env(safe-area-inset-right))
-                max(8px, env(safe-area-inset-bottom))
-                max(8px, env(safe-area-inset-left));
-        }
-
-        @container (orientation: landscape) and (max-height: 600px) {
-            .app {
-                grid-template-columns: minmax(110px, 1fr) 4fr minmax(110px, 1fr);
-                grid-template-rows: auto minmax(0, 1fr);
-                grid-template-areas:
-                    "hud hud hud"
-                    "special field stick";
-            }
+                max(4px, env(safe-area-inset-top))
+                max(4px, env(safe-area-inset-right))
+                max(4px, env(safe-area-inset-bottom))
+                max(4px, env(safe-area-inset-left));
         }
 
         .hud {
-            grid-area: hud;
+            grid-area: 1 / 1;
+            align-self: start;
+            justify-self: center;
+            z-index: 2;
+            width: min(60%, 420px);
+            margin-top: 6px;
+            padding: 4px 10px 6px;
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.6);
+            pointer-events: none;
             display: flex;
             flex-direction: column;
             gap: 4px;
@@ -112,7 +105,7 @@
         }
 
         .field {
-            grid-area: field;
+            grid-area: 1 / 1;
             position: relative;
             container-type: size;
             display: grid;
@@ -304,38 +297,22 @@
             color: #fbbf24;
         }
 
-        .stick-zone {
-            grid-area: stick;
-            position: relative;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.06);
-            overflow: hidden;
-        }
-
-        .stick-zone-label {
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 8px;
-            text-align: center;
-            font-size: 0.75em;
-            color: rgba(255, 255, 255, 0.5);
-            pointer-events: none;
-        }
-
         .stick-base {
-            position: absolute;
-            left: 50%;
-            top: 50%;
+            position: fixed;
+            z-index: 3;
             width: 100px;
             height: 100px;
             margin: -50px 0 0 -50px;
             border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            background: rgba(255, 255, 255, 0.08);
-            display: grid;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            background: rgba(15, 23, 42, 0.3);
+            display: none;
             place-items: center;
             pointer-events: none;
+        }
+
+        .stick-base.active {
+            display: grid;
         }
 
         .stick-knob {
@@ -346,10 +323,12 @@
         }
 
         .special-btn {
-            grid-area: special;
-            align-self: center;
-            justify-self: center;
-            width: min(110px, 80%);
+            grid-area: 1 / 1;
+            align-self: end;
+            justify-self: start;
+            z-index: 2;
+            margin: 0 0 16px 16px;
+            width: 96px;
             aspect-ratio: 1;
             border-radius: 50%;
             border: none;
@@ -415,8 +394,8 @@
                     <h1>ナワバリバトル</h1>
                     <p class="level-badge">VS CPU <span id="startLevel">Lv.1</span></p>
                     <p>
-                        右の操作エリアをドラッグして移動。<br>
-                        ⭐を2つ取って左の SP ボタンで必殺技！<br>
+                        画面のどこでもドラッグして移動。<br>
+                        ⭐を2つ取って左下の SP ボタンで必殺技！<br>
                         30秒で CPU より多く塗ろう
                     </p>
                     <p class="key-hint">キーボード: WASD / 矢印キーで移動、スペースで必殺技</p>
@@ -443,11 +422,8 @@
             </div>
         </div>
 
-        <div class="stick-zone" id="stickZone">
-            <div class="stick-base" id="stickBase">
-                <div class="stick-knob" id="stickKnob"></div>
-            </div>
-            <span class="stick-zone-label">ドラッグで移動</span>
+        <div class="stick-base" id="stickBase">
+            <div class="stick-knob" id="stickKnob"></div>
         </div>
 
         <button type="button" class="special-btn" id="specialBtn">

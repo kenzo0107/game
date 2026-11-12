@@ -323,7 +323,7 @@ class Game {
     }
 
     private setupStick(): void {
-        const zone = document.getElementById('stickZone')!;
+        const field = document.querySelector('.field') as HTMLElement;
         let activePointer: number | null = null;
         let origin: Position = { x: 0, y: 0 };
 
@@ -346,26 +346,27 @@ class Game {
         };
 
         // 固定位置のスティックだと親指の置き場所がずれて誤操作しやすいため、触れた位置をスティックの中心にする
-        zone.addEventListener('pointerdown', (e) => {
+        field.addEventListener('pointerdown', (e) => {
+            if (activePointer !== null || (e.target as Element).closest('button, a, .overlay.show')) return;
             e.preventDefault();
             activePointer = e.pointerId;
             origin = { x: e.clientX, y: e.clientY };
-            const rect = zone.getBoundingClientRect();
-            this.setStickBase(e.clientX - rect.left, e.clientY - rect.top);
+            this.showStickBase(e.clientX, e.clientY);
             move(e);
-            zone.setPointerCapture(e.pointerId);
+            field.setPointerCapture(e.pointerId);
         });
-        zone.addEventListener('pointermove', (e) => {
+        field.addEventListener('pointermove', (e) => {
             if (e.pointerId === activePointer) move(e);
         });
-        zone.addEventListener('pointerup', release);
-        zone.addEventListener('pointercancel', release);
+        field.addEventListener('pointerup', release);
+        field.addEventListener('pointercancel', release);
     }
 
-    private setStickBase(left: number, top: number): void {
+    private showStickBase(x: number, y: number): void {
         const base = document.getElementById('stickBase')!;
-        base.style.left = `${left}px`;
-        base.style.top = `${top}px`;
+        base.style.left = `${x}px`;
+        base.style.top = `${y}px`;
+        base.classList.add('active');
     }
 
     private setStickKnob(dx: number, dy: number): void {
@@ -375,9 +376,7 @@ class Game {
     private releaseStick(): void {
         this.stick = { x: 0, y: 0 };
         this.setStickKnob(0, 0);
-        const base = document.getElementById('stickBase')!;
-        base.style.left = '';
-        base.style.top = '';
+        document.getElementById('stickBase')!.classList.remove('active');
     }
 
     public startGame(): void {
