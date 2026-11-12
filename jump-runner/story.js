@@ -1,6 +1,7 @@
 const BOSS_ROSTER = [
     { kind: 'tsuno', name: 'ツノダイマオウ', color: '#FF5252', taunt: 'このタネは わたさんぞ!', reply: 'かえしてもらうぜ!' },
     { kind: 'mecha', name: 'メカ・モンバン', color: '#FFA726', taunt: 'ココハ トオサナイ', reply: 'とおらせてもらうぜ!' },
+    { kind: 'mole', name: 'アナホリモグーラ', color: '#66BB6A', taunt: 'タネは ちかに かくしたモグ!', reply: 'ほりだしてやる!' },
     { kind: 'kage', name: 'カゲノオウ', color: '#AB47BC', taunt: 'すべての いろは わがものだ…', reply: 'みんなの いろを かえせ!' },
 ];
 

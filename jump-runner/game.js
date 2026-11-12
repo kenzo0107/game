@@ -1406,7 +1406,262 @@ class Boss {
     }
 }
 
-const BOSS_CLASSES = {};
+const LASER_WARN_TICKS = 70;
+const LASER_FIRE_TICKS = 24;
+
+// 段差の上でも同じ操作でよけられるよう、ボスの攻撃の高さはプレイヤーの足元を基準にする
+function playerFloorY() {
+    return player.groundY - terrainHeightAt(player.x + player.width / 2);
+}
+
+// 爆弾の跳ね返しだけでは最初のボスと同じ戦い方になるため、低いレーザーはジャンプ、高いレーザーは主にスライディングでよけさせる
+class LaserHazard {
+    constructor(boss, type) {
+        this.boss = boss;
+        this.type = type;
+        this.timer = 0;
+        this.harmless = false;
+        this.done = false;
+        addPopup(player.x + player.width / 2, player.y - 40, type === 'low' ? 'ジャンプ!' : 'スライディング!', '#FF8A80', 16);
+        playLaserChargeSound();
+    }
+
+    top() {
+        return this.type === 'low' ? playerFloorY() + 12 : playerFloorY() - 110;
+    }
+
+    bottom() {
+        return this.type === 'low' ? playerFloorY() + 30 : playerFloorY() + 14;
+    }
+
+    update() {
+        this.timer++;
+        if (this.timer === LASER_WARN_TICKS) {
+            shakeScreen(6);
+            comicSfx(this.boss.x - 40, this.top() + 10, 'ビーーッ!', '#FF5252', 18, 24);
+            playLaserSound();
+        }
+        if (this.timer >= LASER_WARN_TICKS + LASER_FIRE_TICKS) this.done = true;
+    }
+
+    zone() {
+        if (this.timer < LASER_WARN_TICKS) return null;
+        const top = this.top();
+        return { x: -50, y: top, width: this.boss.x + 50, height: this.bottom() - top };
+    }
+
+    draw() {
+        const top = this.top();
+        const height = this.bottom() - top;
+        const right = this.boss.x;
+        if (this.timer < LASER_WARN_TICKS) {
+            const blink = Math.floor(this.timer / 6) % 2 === 0;
+            ctx.fillStyle = blink ? 'rgba(255, 82, 82, 0.35)' : 'rgba(255, 82, 82, 0.15)';
+            ctx.fillRect(0, top, right, height);
+            ctx.strokeStyle = '#FF5252';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 8]);
+            ctx.strokeRect(0, top, right, height);
+            ctx.setLineDash([]);
+            if (blink) outlinedText('!', right - 30, top + height / 2, 22, '#FFEB3B');
+            return;
+        }
+        const flicker = Math.random() * 4;
+        ctx.fillStyle = '#FF1744';
+        ctx.fillRect(-50, top - flicker / 2, right + 50, height + flicker);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-50, top + height * 0.3, right + 50, height * 0.4);
+    }
+}
+
+function digHoleAt(x) {
+    const hole = new Obstacle('hole');
+    hole.x = x - hole.width / 2;
+    hole.lift = terrainHeightAt(hole.x);
+    hole.y = GROUND_Y - hole.lift;
+    obstacles.push(hole);
+    return hole;
+}
+
+class MechaBoss extends Boss {
+    shoot() {
+        if (this.hazards.length || Math.random() < 0.4) {
+            bombs.push(new Bomb(this.x, this.y + this.height / 2));
+            return;
+        }
+        this.hazards.push(new LaserHazard(this, Math.random() < 0.5 ? 'low' : 'high'));
+        this.attackCooldown = LASER_WARN_TICKS + LASER_FIRE_TICKS + 30;
+    }
+}
+
+// 踏まれて潜るときにも穴を残すと、跳ね返ったプレイヤーの真下に穴が開いて避けようがないため、穴は踏まれずに潜るときだけ残す
+const MOLE_BODY = 64;
+const MOLE_DIVE_TICKS = 20;
+const MOLE_BURROW_TICKS = 60;
+const MOLE_RISE_TICKS = 15;
+const MOLE_UP_TICKS = 80;
+
+class MoleBoss extends Boss {
+    constructor(profile, level) {
+        super(profile, level);
+        this.width = MOLE_BODY;
+        this.x = view.width - 160;
+        this.state = 'intro';
+        this.stateTimer = 0;
+        this.visible = 1;
+        this.fromX = this.x;
+        this.toX = this.x;
+        this.leavesHole = false;
+        this.placeBody();
+    }
+
+    groundBottom() {
+        return RUN_LINE_Y - 3 - terrainHeightAt(this.x + this.width / 2);
+    }
+
+    placeBody() {
+        this.height = MOLE_BODY * this.visible;
+        this.y = this.groundBottom() - this.height;
+    }
+
+    enter(state) {
+        this.state = state;
+        this.stateTimer = 0;
+    }
+
+    act() {
+        this.stateTimer++;
+        const t = this.stateTimer;
+        if (this.state === 'intro') {
+            if (this.fighting) this.dive(false);
+        } else if (this.state === 'dive') {
+            this.visible = 1 - t / MOLE_DIVE_TICKS;
+            if (t >= MOLE_DIVE_TICKS) this.startBurrow();
+        } else if (this.state === 'burrow') {
+            const p = t / MOLE_BURROW_TICKS;
+            this.x = this.fromX + (this.toX - this.fromX) * p;
+            if (t % 6 === 0) smokePuffs(this.x + this.width / 2, this.groundBottom(), 2, 0.6);
+            if (t >= MOLE_BURROW_TICKS) {
+                this.enter('rise');
+                comicSfx(this.x + this.width / 2, this.groundBottom() - 70, 'モグッ!', '#A1887F', 18, 30);
+            }
+        } else if (this.state === 'rise') {
+            this.x -= gameSpeed;
+            this.visible = t / MOLE_RISE_TICKS;
+            if (t >= MOLE_RISE_TICKS) this.enter('up');
+        } else if (this.state === 'up') {
+            this.x -= gameSpeed;
+            if (t === 35) this.throwDirt();
+            if (t >= MOLE_UP_TICKS) this.dive(true);
+        }
+        this.placeBody();
+    }
+
+    dive(leavesHole) {
+        this.leavesHole = leavesHole;
+        if (leavesHole) this.digHole();
+        this.enter('dive');
+    }
+
+    digHole() {
+        digHoleAt(this.x + this.width / 2);
+        smokePuffs(this.x + this.width / 2, this.groundBottom(), 8, 1.2);
+        comicSfx(this.x + this.width / 2, this.groundBottom() - 60, 'ザクッ', '#A1887F', 16, 26);
+    }
+
+    startBurrow() {
+        this.fromX = this.x;
+        this.toX = Math.min(player.x + 260 + Math.random() * 160, view.width - this.width - 20);
+        this.enter('burrow');
+    }
+
+    throwDirt() {
+        const bullet = new Bullet(this.x, this.y + 10);
+        bullet.setArcVelocity(-3, -7);
+        bullets.push(bullet);
+    }
+
+    onStomped() {
+        if (this.state === 'up' || this.state === 'rise') this.dive(false);
+    }
+
+    onShieldHit() {
+        this.dive(false);
+    }
+
+    get harmsOnTouch() {
+        return ['intro', 'rise', 'up'].includes(this.state);
+    }
+
+    get stompable() {
+        return (this.state === 'rise' || this.state === 'up') && this.invincibleTimer === 0;
+    }
+
+    drawBody() {
+        const bottom = this.groundBottom();
+        const cx = this.x + this.width / 2;
+        if (this.state === 'burrow') {
+            ctx.fillStyle = '#6D4C41';
+            ctx.beginPath();
+            ctx.ellipse(cx, bottom, 26, 10 + Math.sin(this.animationOffset * 4) * 2, 0, Math.PI, 0);
+            ctx.fill();
+            return;
+        }
+        ctx.fillStyle = '#3E2723';
+        ctx.beginPath();
+        ctx.ellipse(cx, bottom, 40, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        if (this.visible <= 0) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(this.x - 30, view.top, this.width + 60, bottom - view.top);
+        ctx.clip();
+        const top = bottom - MOLE_BODY * this.visible;
+        ctx.fillStyle = '#795548';
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(cx, top + MOLE_BODY * 0.55, this.width / 2, MOLE_BODY * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#D7CCC8';
+        ctx.beginPath();
+        ctx.ellipse(cx, top + MOLE_BODY * 0.7, this.width * 0.3, MOLE_BODY * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.fillRect(cx - 22, top + 14, 44, 10);
+        ctx.fillStyle = '#FFF';
+        ctx.fillRect(cx - 18, top + 15, 6, 3);
+        ctx.fillStyle = '#FF80AB';
+        ctx.beginPath();
+        ctx.arc(cx, top + 32, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#FFF';
+        ctx.fillRect(cx - 6, top + 40, 5, 7);
+        ctx.fillRect(cx + 1, top + 40, 5, 7);
+        ctx.strokeStyle = '#FFE0B2';
+        ctx.lineWidth = 3;
+        for (const side of [-1, 1]) {
+            const pawX = cx + side * (this.width / 2 + 4);
+            for (let k = -1; k <= 1; k++) {
+                ctx.beginPath();
+                ctx.moveTo(pawX, top + 40);
+                ctx.lineTo(pawX + side * 8, top + 34 + k * 6);
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    }
+
+    drawStatus() {
+        if (this.state === 'burrow' || this.visible < 0.5) return;
+        super.drawStatus();
+    }
+}
+
+const BOSS_CLASSES = { mecha: MechaBoss, mole: MoleBoss };
 
 function createBoss(profile, level) {
     const BossClass = BOSS_CLASSES[profile.kind] || Boss;
@@ -2181,6 +2436,30 @@ function playBossAppearSound() {
         oscillator.start(startTime);
         oscillator.stop(startTime + 0.2);
     });
+}
+
+function playSweep(type, fromFreq, toFreq, duration, volume) {
+    if (!audioContext) return;
+    const startTime = audioContext.currentTime;
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(fromFreq, startTime);
+    oscillator.frequency.exponentialRampToValueAtTime(toFreq, startTime + duration);
+    gainNode.gain.setValueAtTime(volume, startTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+    oscillator.connect(gainNode);
+    gainNode.connect(masterGain);
+    oscillator.start(startTime);
+    oscillator.stop(startTime + duration);
+}
+
+function playLaserChargeSound() {
+    playSweep('square', 200, 900, 1.0, 0.08);
+}
+
+function playLaserSound() {
+    playSweep('sawtooth', 1200, 150, 0.4, 0.2);
 }
 
 const RUN_BASS_ROOTS = [45, 41, 43, 40];
