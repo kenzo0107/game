@@ -146,6 +146,29 @@ export class Sound {
   }
 
   public clear(): void {
-    this.notes([[523, 0, 0.15], [659, 0.15, 0.15], [784, 0.3, 0.15], [1047, 0.45, 0.5]]);
+    const ctx = this.context();
+    if (!ctx) return;
+    this.notes(
+      [[392, 0, 0.12], [523, 0.13, 0.12], [659, 0.26, 0.12], [784, 0.39, 0.28], [659, 0.7, 0.12], [784, 0.83, 0.3]],
+      'square',
+      0.07,
+    );
+    this.notes([[523, 1.15, 1.5], [659, 1.15, 1.5], [784, 1.15, 1.5], [1047, 1.15, 1.6]], 'sawtooth', 0.035);
+    this.notes([[1047, 1.15, 1.6], [1319, 1.15, 1.6]], 'square', 0.04);
+    this.notes([[131, 0, 0.3], [98, 0.39, 0.3], [131, 0.7, 0.4], [65, 1.15, 1.6]], 'triangle', 0.2);
+    this.notes([[2093, 1.25, 0.25], [2637, 1.35, 0.25], [3136, 1.45, 0.25], [4186, 1.55, 0.6]], 'sine', 0.05);
+
+    const cymbal = this.noiseSource(ctx);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 6000;
+    const gain = ctx.createGain();
+    const t = ctx.currentTime + 1.15;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    cymbal.connect(filter).connect(gain).connect(ctx.destination);
+    cymbal.start(t);
+    cymbal.stop(t + 1.5);
   }
 }

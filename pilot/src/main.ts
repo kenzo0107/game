@@ -64,6 +64,8 @@ const saveSongIndex = (index: number): void => {
   }
 };
 
+const CLEAR_TAP_DELAY_MS = 800;
+
 const LOW_ALTITUDE = 12;
 const LOW_ALTITUDE_ALERT_INTERVAL = 0.9;
 
@@ -107,6 +109,9 @@ class Game {
 
     window.addEventListener('resize', () => this.onWindowResize());
     window.addEventListener('keydown', (e) => this.onKey(e));
+    window.addEventListener('pointerup', () => {
+      if (this.phase === 'cleared') this.primaryAction?.();
+    });
 
     this.loadStage(Math.min(this.progress.unlocked, STAGES.length) - 1);
     this.showMenu();
@@ -208,8 +213,8 @@ class Game {
 
   private onClear(): void {
     this.phase = 'cleared';
+    this.music.setMode('off');
     this.sound.clear();
-    this.music.setMode('menu');
     const allRings = this.rings.passedCount === this.rings.total;
     const onRunway = this.aircraft.isStoppedOnRunway();
     const stars = 1 + (allRings ? 1 : 0) + (onRunway ? 1 : 0);
@@ -225,14 +230,15 @@ class Game {
       onRunway ? '滑走路の上でとまれた ★' : '滑走路からはみ出した',
     ];
     if (isLast) lines.push('全ステージクリア！ おめでとう！');
-    const buttons: OverlayButton[] = isLast
-      ? []
-      : [{ label: `次のステージへ（STAGE ${i + 2}）`, onSelect: () => this.startStage(i + 1) }];
-    buttons.push(
-      { label: 'もう一度', onSelect: () => this.startStage(i) },
-      { label: 'ステージをえらぶ', onSelect: () => this.showMenu() },
-    );
-    this.showOverlay('clear', `STAGE ${i + 1} クリア！`, lines, buttons);
+    lines.push(isLast ? '画面をタップしてステージ選択へ' : '画面をタップして次のステージへ');
+    this.showOverlay('clear', `STAGE ${i + 1} クリア！`, lines, []);
+    // 操縦中に触れていた指がそのまま次のステージ開始にならないよう、少し待ってから受け付ける
+    const readyAt = performance.now() + CLEAR_TAP_DELAY_MS;
+    this.primaryAction = () => {
+      if (performance.now() < readyAt) return;
+      if (isLast) this.showMenu();
+      else this.startStage(i + 1);
+    };
   }
 
   private onKey(e: KeyboardEvent): void {
