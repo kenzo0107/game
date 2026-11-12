@@ -203,8 +203,14 @@ class Player {
         this.velocityY += this.gravity;
         this.y += this.velocityY;
 
+        // 中心が高い地形に入ってから着地判定すると崖の側面から上へ瞬間移動するため、先に壁で押し戻す
+        const wall = terrainSegmentAt(this.x + this.width);
+        if (wall.height > terrainHeightAt(this.x) && this.y > this.groundY - wall.height) {
+            this.x = wall.x - this.width;
+        }
+
         // 坂道や段差の上に乗れるかチェック
-        let currentGroundY = this.groundY;
+        let currentGroundY = this.groundY - terrainHeightAt(this.x + this.width / 2);
         for (const obstacle of obstacles) {
             const result = obstacle.canStandOn(this.x, this.y, this.width, this.height);
             if (result.canStand) {
@@ -453,12 +459,6 @@ class Player {
         ctx.lineCap = 'butt';
         ctx.restore();
 
-        // プレイヤー表示
-        if (this.isPlayer && !sliding && !this.dying) {
-            ctx.fillStyle = '#000';
-            ctx.font = '12px Arial';
-            ctx.fillText('YOU', this.x + 3, this.y - 5);
-        }
     }
 }
 
@@ -490,6 +490,12 @@ class Obstacle {
             this.y = -1000;
             this.height = GATE_BOTTOM - this.y;
         }
+        this.lift = terrainHeightAt(this.x);
+        this.y -= this.lift;
+    }
+
+    get baseY() {
+        return GROUND_Y - this.lift;
     }
 
     update() {
@@ -499,7 +505,7 @@ class Obstacle {
     draw() {
         if (this.type === 'hole') {
             ctx.fillStyle = '#333';
-            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.fillRect(this.x, this.y, this.width, view.bottom - this.y);
         } else if (this.type === 'block') {
             // より明るく目立つオレンジ色
             ctx.fillStyle = '#FF8C00';
@@ -518,9 +524,9 @@ class Obstacle {
             // 登り坂
             ctx.fillStyle = '#4169E1';
             ctx.beginPath();
-            ctx.moveTo(this.x, 360);
+            ctx.moveTo(this.x, this.baseY);
             ctx.lineTo(this.x + this.width, this.y);
-            ctx.lineTo(this.x + this.width, 360);
+            ctx.lineTo(this.x + this.width, this.baseY);
             ctx.closePath();
             ctx.fill();
             ctx.strokeStyle = '#000';
@@ -531,8 +537,8 @@ class Obstacle {
             ctx.fillStyle = '#4169E1';
             ctx.beginPath();
             ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.x + this.width, 360);
-            ctx.lineTo(this.x, 360);
+            ctx.lineTo(this.x + this.width, this.baseY);
+            ctx.lineTo(this.x, this.baseY);
             ctx.closePath();
             ctx.fill();
             ctx.strokeStyle = '#000';
@@ -540,17 +546,18 @@ class Obstacle {
             ctx.stroke();
         } else if (this.type === 'gate') {
             const top = view.top - 10;
+            const bottom = this.y + this.height;
             ctx.fillStyle = '#8D6E63';
-            ctx.fillRect(this.x + 4, top, this.width - 8, GATE_BOTTOM - 20 - top);
+            ctx.fillRect(this.x + 4, top, this.width - 8, bottom - 20 - top);
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 2;
-            ctx.strokeRect(this.x + 4, top, this.width - 8, GATE_BOTTOM - 20 - top);
+            ctx.strokeRect(this.x + 4, top, this.width - 8, bottom - 20 - top);
             for (let i = 0; i < 4; i++) {
                 ctx.fillStyle = i % 2 === 0 ? '#FFD600' : '#212121';
-                ctx.fillRect(this.x + (i * this.width) / 4, GATE_BOTTOM - 20, this.width / 4, 20);
+                ctx.fillRect(this.x + (i * this.width) / 4, bottom - 20, this.width / 4, 20);
             }
-            ctx.strokeRect(this.x, GATE_BOTTOM - 20, this.width, 20);
-            outlinedText('↓', this.x + this.width / 2, GATE_BOTTOM - 40, 16, '#FFD600');
+            ctx.strokeRect(this.x, bottom - 20, this.width, 20);
+            outlinedText('↓', this.x + this.width / 2, bottom - 40, 16, '#FFD600');
         } else if (this.type === 'step') {
             // 段差
             ctx.fillStyle = '#CD853F';
@@ -586,7 +593,7 @@ class Obstacle {
                 if (this.type === 'slope_up') {
                     // 登り坂の高さ計算
                     const progress = (playerCenterX - this.x) / this.width;
-                    const slopeTop = 360 - (this.height * progress);
+                    const slopeTop = this.baseY - (this.height * progress);
                     return { canStand: true, groundY: slopeTop };
                 } else if (this.type === 'slope_down') {
                     // 下り坂の高さ計算
@@ -654,6 +661,10 @@ class Enemy {
         }
         this.x -= this.speed;
         this.animationFrame++;
+
+        if (this.type !== 'flyer') {
+            this.y = GROUND_Y - this.height - terrainHeightAt(this.x + this.width / 2);
+        }
 
         if (this.type === 'flyer') {
             // 上下に波打つ動き
@@ -1588,16 +1599,85 @@ class Coin {
     }
 }
 
-function spawnCoinArc(startX, width) {
+function spawnCoinArc(obstacle) {
     for (let i = 0; i < 5; i++) {
         const t = i / 4;
-        coins.push(new Coin(startX - 30 + t * (width + 60), 320 - Math.sin(t * Math.PI) * 110));
+        const x = obstacle.x - 30 + t * (obstacle.width + 60);
+        coins.push(new Coin(x, obstacle.baseY - 40 - Math.sin(t * Math.PI) * 110));
     }
 }
 
 function spawnCoinRow() {
+    const lift = terrainHeightAt(view.width);
     for (let i = 0; i < 5; i++) {
-        coins.push(new Coin(view.width + i * 28, 355));
+        coins.push(new Coin(view.width + i * 28, 355 - lift));
+    }
+}
+
+// 地形の高さ。区間ごとに一定の高さを持ち、上りの段差はジャンプで乗り越える
+const TERRAIN_LEVELS = [0, 40, 80];
+// 段差に体がぶつかる何フレーム前に踏み切ればよいか。早すぎても遅すぎても届く範囲の中ほどにする
+const STEP_TAKEOFF_FRAMES = 18;
+let terrain = [];
+
+function resetTerrain() {
+    terrain = [{ x: -50, width: view.width + 650, height: 0, guided: true }];
+}
+
+function terrainSegmentAt(x) {
+    return terrain.find((s) => x < s.x + s.width) || terrain[terrain.length - 1];
+}
+
+function terrainHeightAt(x) {
+    return terrain.length ? terrainSegmentAt(x).height : 0;
+}
+
+function isTerrainFlat(from, to) {
+    return !terrain.some((s) => s.x > from && s.x < to);
+}
+
+function nextTerrainHeight(current) {
+    if (boss) return 0;
+    const choices = TERRAIN_LEVELS.filter((h) => h !== current);
+    return choices[Math.floor(Math.random() * choices.length)];
+}
+
+// コインをジャンプの軌道どおりに並べ、どこで踏み切ればよいかを見せる
+function spawnStepUpGuide(edgeX, fromHeight, toHeight) {
+    const g = player.gravity;
+    const v = -player.jumpPower;
+    const landFrames = (v + Math.sqrt(v * v - 2 * g * (toHeight - fromHeight))) / g;
+    // 段差に着くまでにスコアが進んで速度が上がるため、その分を見込む（1 フレームで score+1、100 ごとに +0.2）
+    const framesToEdge = (edgeX - player.x - player.width) / gameSpeed;
+    const speed = gameSpeed + 0.002 * framesToEdge;
+    const centerY = player.groundY - fromHeight + player.height / 2;
+    const count = 7;
+    for (let i = 0; i < count; i++) {
+        const t = (landFrames * i) / (count - 1);
+        const x = edgeX + speed * (t - STEP_TAKEOFF_FRAMES) - player.width / 2;
+        const y = centerY - (v * t - (g * t * t) / 2);
+        coins.push(new Coin(x - 8, y - 8));
+    }
+}
+
+function updateTerrain() {
+    for (const s of terrain) s.x -= gameSpeed;
+    while (terrain.length > 1 && terrain[0].x + terrain[0].width < 0) terrain.shift();
+
+    let last = terrain[terrain.length - 1];
+    while (last.x + last.width < view.width + 1200) {
+        // 速度が上がっても区間を通り過ぎる時間が変わらないよう、幅を速度に比例させる
+        const width = (250 + Math.random() * 250) * gameSpeed;
+        last = { x: last.x + last.width, width, height: nextTerrainHeight(last.height), guided: false };
+        terrain.push(last);
+    }
+
+    for (let i = 1; i < terrain.length; i++) {
+        const s = terrain[i];
+        if (s.guided || s.x > view.width + 250) continue;
+        s.guided = true;
+        const prev = terrain[i - 1];
+        if (s.height > prev.height) spawnStepUpGuide(s.x, prev.height, s.height);
     }
 }
 
@@ -1638,7 +1718,7 @@ let nextBossScore = 3000; // 次にボスが出現するスコア
 class GroundLine {
     constructor(x = view.width) {
         this.x = x;
-        this.y = 365 + Math.random() * 30; // 地面の上にランダムに配置
+        this.y = 365 + Math.random() * 30 - terrainHeightAt(x); // 地面の上にランダムに配置
         this.width = 20 + Math.random() * 30;
         this.speedMultiplier = 1.0; // 地面と同じ速度
     }
@@ -2145,6 +2225,7 @@ function init() {
     gameSpeed = 2; // 3から2に変更（難易度を下げる）
     obstacleTimer = 0;
     backgroundTimer = 0;
+    resetTerrain();
 
     // プレイヤー1人
     player = new Player(100, 350, true, 'ally');
@@ -2197,8 +2278,9 @@ function rewardPass(target) {
     target.passed = true;
     if (!player.alive) return;
     if (target.type === 'gate') {
-        addScore(20, target.x + target.width / 2, GATE_BOTTOM - 50, '#FFFFFF');
-        addPopup(target.x + target.width / 2, GATE_BOTTOM - 75, 'ナイス!', '#80DEEA', 16);
+        const bottom = target.y + target.height;
+        addScore(20, target.x + target.width / 2, bottom - 50, '#FFFFFF');
+        addPopup(target.x + target.width / 2, bottom - 75, 'ナイス!', '#80DEEA', 16);
     } else if (player.isJumping) {
         addScore(10, target.x + target.width / 2, target.y - 10, '#FFFFFF');
     }
@@ -2235,10 +2317,24 @@ function drawSky() {
 }
 
 function drawGround() {
-    ctx.fillStyle = '#90EE90';
-    ctx.fillRect(0, GROUND_Y, view.width, WORLD_HEIGHT - GROUND_Y);
-    ctx.fillStyle = '#8B5A2B';
-    ctx.fillRect(0, WORLD_HEIGHT, view.width, view.bottom - WORLD_HEIGHT);
+    for (const s of terrain) {
+        const top = GROUND_Y - s.height;
+        const soil = top + WORLD_HEIGHT - GROUND_Y;
+        ctx.fillStyle = '#90EE90';
+        ctx.fillRect(s.x, top, s.width + 1, soil - top);
+        ctx.fillStyle = '#8B5A2B';
+        ctx.fillRect(s.x, soil, s.width + 1, view.bottom - soil);
+    }
+    ctx.strokeStyle = '#2E7D32';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    terrain.forEach((s, i) => {
+        const top = GROUND_Y - s.height;
+        if (i === 0) ctx.moveTo(s.x, top);
+        else ctx.lineTo(s.x, top);
+        ctx.lineTo(s.x + s.width, top);
+    });
+    ctx.stroke();
 }
 
 // 端末のリフレッシュレートや処理落ちに関係なく、ゲームは常に秒間 60 ステップで進める
@@ -2394,7 +2490,7 @@ function tick() {
         }
     }
 
-    // 地面描画
+    updateTerrain();
     drawGround();
 
     // 地面の模様を描画（スピード感を出すため）
@@ -2438,7 +2534,8 @@ function tick() {
     // 障害物生成（ボス戦中は生成しない）
     if (!boss) {
         obstacleTimer++;
-    if (obstacleTimer > 150) { // 120から150に変更（難易度を下げる）
+    // 段差の踏み切りや着地の場所に障害物が重なると避けようがないため、平らな場所にだけ出す
+    if (obstacleTimer > 150 && isTerrainFlat(view.width - 40 * gameSpeed, view.width + 200 + 40 * gameSpeed)) { // 120から150に変更（難易度を下げる）
         const rand = Math.random();
 
         // 8%の確率でアイテムを生成
@@ -2506,16 +2603,16 @@ function tick() {
             const obstacle = new Obstacle(type);
             obstacles.push(obstacle);
             if ((type === 'hole' || type === 'block') && Math.random() < 0.6) {
-                spawnCoinArc(obstacle.x, obstacle.width);
+                spawnCoinArc(obstacle);
             } else if (type === 'gate' && Math.random() < 0.6) {
-                for (let c = 0; c < 4; c++) coins.push(new Coin(obstacle.x - 40 + c * 34, 362));
+                for (let c = 0; c < 4; c++) coins.push(new Coin(obstacle.x - 40 + c * 34, 362 - obstacle.lift));
             }
         }
         obstacleTimer = 0;
     }
         if (++coinTimer > 220) {
             coinTimer = 0;
-            if (Math.random() < 0.5) spawnCoinRow();
+            if (Math.random() < 0.5 && isTerrainFlat(view.width - 40 * gameSpeed, view.width + 140 + 40 * gameSpeed)) spawnCoinRow();
         }
     }
 
