@@ -1689,6 +1689,8 @@ function spawnCoinRow() {
 const TERRAIN_LEVELS = [0, 40, 80];
 // 段差に体がぶつかる何フレーム前に踏み切ればよいか。早すぎても遅すぎても届く範囲の中ほどにする
 const STEP_TAKEOFF_FRAMES = 18;
+// 他の障害物と同じ手前の余白では、壁際から段差へ飛び乗る滞空(約44フレーム)中にゲートへ当たり、壁とゲートの間で詰む
+const GATE_RUNUP_FRAMES = 90;
 let terrain = [];
 
 function resetTerrain() {
@@ -2713,7 +2715,7 @@ function tick() {
                 type = 'hole';
             } else if (rand < 0.6) {
                 type = 'block';
-            } else if (rand < 0.72) {
+            } else if (rand < 0.72 && isTerrainFlat(view.width - GATE_RUNUP_FRAMES * gameSpeed, view.width)) {
                 type = 'gate';
             } else if (rand < 0.8) {
                 type = 'slope_up';
