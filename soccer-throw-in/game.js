@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createComic } from '../shared/comic.js';
 
 // r128 から上げた際に見た目が変わらないよう、旧来の色管理なし・リニア出力に合わせる。色を作る前に切り替える必要がある
 THREE.ColorManagement.enabled = false;
@@ -9,7 +10,6 @@ const bestEl = document.getElementById('best');
 const hintEl = document.getElementById('hint');
 const resultEl = document.getElementById('result');
 const resultDistanceEl = document.getElementById('resultDistance');
-const resultBestEl = document.getElementById('resultBest');
 const resultDetailEl = document.getElementById('resultDetail');
 const gaugeEl = document.getElementById('gauge');
 const powerBar = document.getElementById('powerBar');
@@ -46,8 +46,9 @@ const PLAYER_X = -35;
 const ARM_REST = -1.2;
 const ARM_WINDUP = -Math.PI - 0.6;
 const ARM_FOLLOW = -1.1;
+const SWEET_POWER = 90;
 
-let scene, camera, renderer, player, ball, aimArrow, landingMarker;
+let scene, camera, renderer, player, ball, aimArrow, landingMarker, comic;
 const arms = [];
 const camLook = new THREE.Vector3();
 const camTargetPos = new THREE.Vector3();
@@ -101,6 +102,7 @@ function init() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     stage.appendChild(renderer.domElement);
+    comic = createComic({ after: renderer.domElement });
 
     // r155 で光の強さが物理単位になり暗く見えるため、旧来の明るさに合わせて π 倍する
     scene.add(new THREE.AmbientLight(0xffffff, 0.6 * Math.PI));
@@ -127,7 +129,7 @@ function init() {
         // 1フレーム固定量で進めると 120Hz 端末でボールが倍速になるため、経過時間を60fps換算する
         const frames = Math.min((now - last) / (1000 / 60), 3);
         last = now;
-        update(frames);
+        if (!comic.stopped()) update(frames);
         renderer.render(scene, camera);
     });
 }
@@ -311,7 +313,19 @@ function updateAimArrow() {
     aimArrow.setLength(2 + 3 * (power / 100), 0.9, 0.6);
 }
 
+function toScreen(position) {
+    const v = position.clone().project(camera);
+    if (v.z > 1) return null;
+    return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight };
+}
+
+const headPosition = new THREE.Vector3();
+function playerHead() {
+    return toScreen(headPosition.copy(player.position).setY(3.3));
+}
+
 function resetRound() {
+    comic.clear();
     state = STATE.READY;
     power = 0;
     powerDirection = 1;
@@ -337,6 +351,7 @@ function startAiming(y) {
     hintEl.hidden = true;
     gaugeEl.hidden = false;
     aimArrow.visible = true;
+    comic.say(playerHead, 'いくぞー!', 0.9);
     vibrate(10);
 }
 
@@ -423,6 +438,31 @@ function updateAiming(frames) {
     powerValue.textContent = Math.round(power);
     angleValue.textContent = angle;
     updateAimArrow();
+    if (power >= SWEET_POWER) {
+        const head = playerHead();
+        if (head) comic.focus(head.x, head.y, { life: 0.12 });
+        comic.mark(playerHead, '!', 0.15);
+    }
+}
+
+function releaseEffect() {
+    const p = toScreen(ball.position);
+    if (!p) return;
+    const sweet = power >= SWEET_POWER;
+    comic.hitStop(sweet ? 110 : 60);
+    comic.sfx(p.x, p.y - 30 * comic.unit, sweet ? 'ブォンッ!!' : 'ブンッ!', { size: sweet ? 46 : 34 });
+    comic.streaks(p.x, p.y, sweet ? 14 : 8);
+    comic.shake(sweet ? 7 : 4);
+    if (sweet) comic.focus(p.x, p.y, { life: 0.35 });
+}
+
+function landingEffect(carry) {
+    const p = toScreen(ball.position);
+    if (!p) return;
+    comic.sfx(p.x, p.y - 40 * comic.unit, 'ズドンッ!', { size: 28 + Math.min(carry, 60) * 0.4, color: '#FFB300' });
+    comic.smoke(p.x, p.y, 8, 1 + carry / 40);
+    comic.shake(3 + carry / 8);
+    if (carry >= 40) comic.hitStop(80);
 }
 
 function updateSwing(frames) {
@@ -436,6 +476,7 @@ function updateSwing(frames) {
             const rad = THREE.MathUtils.degToRad(angle);
             const speed = (power / 100) * MAX_POWER;
             velocity = new THREE.Vector3(Math.cos(rad) * speed, Math.sin(rad) * speed, 0);
+            releaseEffect();
         }
     } else {
         for (const arm of arms) arm.rotation.x = armAngle;
@@ -465,6 +506,7 @@ function land() {
         landingX = ball.position.x;
         landingMarker.position.x = landingX;
         landingMarker.visible = true;
+        landingEffect(currentDistance(landingX));
         vibrate(15);
     }
     if (-velocity.y > BOUNCE_MIN_SPEED) {
@@ -489,8 +531,9 @@ function finish() {
     resultDistanceEl.textContent = `${distance}m`;
     resultDetailEl.textContent = `着地 ${carry}m ＋ 転がり ${distance - carry}m`;
     const isBest = distance > bestDistance;
-    resultBestEl.hidden = !isBest;
     if (isBest) {
+        comic.banner('NEW BEST!!', { sub: `ベスト更新 +${distance - bestDistance}m`, y: 0.7, life: 2.4 });
+        comic.stars(innerWidth / 2, innerHeight * 0.7, 14);
         bestDistance = distance;
         bestEl.textContent = bestDistance;
         saveBest(bestDistance);

@@ -73,6 +73,9 @@ minify_assets() {
     done
 }
 
+cp -r shared "$OUT_DIR/shared"
+minify_assets "$OUT_DIR/shared"
+
 links=""
 stage=0
 for entry in "${GAMES[@]}"; do

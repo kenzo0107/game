@@ -113,43 +113,6 @@
             opacity: 0;
         }
 
-        .banner {
-            position: fixed;
-            left: 0;
-            right: 0;
-            top: 42%;
-            text-align: center;
-            font-size: clamp(2.4rem, 12vw, 5rem);
-            font-weight: 900;
-            letter-spacing: 0.05em;
-            -webkit-text-stroke: 2px rgba(0, 0, 0, 0.35);
-            text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            pointer-events: none;
-            opacity: 0;
-            transform: scale(0.6);
-            transition: opacity 0.2s, transform 0.25s cubic-bezier(0.2, 1.6, 0.4, 1);
-        }
-
-        .banner.show {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        .banner.goal {
-            color: #facc15;
-        }
-
-        .banner.save {
-            color: #f87171;
-        }
-
-        .banner small {
-            display: block;
-            font-size: 0.35em;
-            -webkit-text-stroke: 0;
-            color: white;
-        }
-
         .overlay {
             position: fixed;
             inset: 0;
@@ -205,7 +168,6 @@
     </div>
 
     <div class="hint" id="hint">ねらうコースへ向けてスワイプ！<br>左右はスワイプの向き・上下は上へ払う長さ</div>
-    <div class="banner" id="banner"></div>
 
     <div class="overlay" id="gameOver">
         <h2 id="finalTitle"></h2>
@@ -213,7 +175,9 @@
         <button type="button" id="restartBtn">もう一度</button>
     </div>
 
-    <script>
+    <script type="module">
+        import { createComic } from '../shared/comic.js';
+
         const MAX_ATTEMPTS = 5;
         const WIN_THRESHOLD = 3;
 
@@ -234,8 +198,8 @@
         const goalsEl = document.getElementById('goals');
         const kicksEl = document.getElementById('kicks');
         const hintEl = document.getElementById('hint');
-        const bannerEl = document.getElementById('banner');
         const gameOverEl = document.getElementById('gameOver');
+        const comic = createComic({ after: canvas });
 
         const view = { w: 0, h: 0, goalL: 0, goalW: 0, goalH: 0, groundY: 0, ballX: 0, ballY: 0, ballR: 0 };
 
@@ -311,6 +275,7 @@
 
         function startGame() {
             results = [];
+            comic.clear();
             gameOverEl.classList.remove('show');
             renderHud();
             resetKick();
@@ -320,7 +285,6 @@
             phase = 'ready';
             shot = null;
             aim = null;
-            bannerEl.className = 'banner';
             hintEl.classList.remove('hidden');
         }
 
@@ -333,17 +297,62 @@
                 keeper,
                 saved,
                 bounce: { vx: (target.x >= keeper.x ? 1 : -1) * view.goalW * 0.5, vy: -view.goalH * 1.2 },
+                contacted: false,
                 announced: false,
             };
             phase = 'kicking';
             hintEl.classList.add('hidden');
         }
 
+        function goalStreak() {
+            const lastSave = results.lastIndexOf(false);
+            return results.length - 1 - lastSave;
+        }
+
+        function keeperHead() {
+            const pose = keeperPose();
+            const p = goalToScreen(pose.x, pose.y);
+            const d = view.goalH * 0.8 * 0.4;
+            return { x: p.x + Math.sin(pose.angle) * d, y: p.y - Math.cos(pose.angle) * d };
+        }
+
+        function kickerHead() {
+            const pose = kickerPose();
+            const s = view.ballR * 7;
+            return { x: pose.x + pose.swing * s * 0.05, y: pose.y - s * 0.98 };
+        }
+
+        function contactEffect() {
+            const { ballX, ballY, ballR } = view;
+            comic.hitStop(90);
+            comic.focus(ballX, ballY, { life: 0.35, color: '#fff' });
+            comic.sfx(ballX + ballR * 2.2, ballY - ballR * 2.2, 'ドンッ!', { size: 40 });
+            comic.streaks(ballX, ballY, 10);
+            comic.shake(6);
+        }
+
         function announce() {
             results.push(!shot.saved);
             renderHud();
-            bannerEl.innerHTML = (shot.saved ? 'SAVE!' : 'GOAL!') + `<small>${zoneLabel(shot.target)}</small>`;
-            bannerEl.className = 'banner show ' + (shot.saved ? 'save' : 'goal');
+            const end = goalToScreen(shot.target.x, shot.target.y);
+            const zone = zoneLabel(shot.target);
+            if (shot.saved) {
+                comic.hitStop(140);
+                comic.sfx(end.x, end.y - view.goalH * 0.25, 'バシィッ!', { size: 40, color: '#FF5252' });
+                comic.sparks(end.x, end.y, 14);
+                comic.shake(8);
+                comic.banner('SAVE!', { color: '#FF5252', sub: zone, y: 0.52 });
+                comic.say(keeperHead, 'とめた!');
+                comic.mark(kickerHead, 'anger', 1.2);
+                return;
+            }
+            const streak = goalStreak();
+            comic.sfx(end.x, end.y - view.goalH * 0.3, 'ズバァッ!', { size: 44 });
+            comic.stars(end.x, end.y, 12);
+            comic.shake(10);
+            comic.banner('GOAL!!', { sub: zone, y: 0.52 });
+            comic.mark(keeperHead, 'sweat', 1.2);
+            comic.say(kickerHead, streak >= 2 ? `${streak}連続!` : 'よっしゃー!');
         }
 
         function finishKick() {
@@ -352,7 +361,6 @@
                 return;
             }
             phase = 'over';
-            bannerEl.className = 'banner';
             const goals = results.filter(Boolean).length;
             const win = goals >= WIN_THRESHOLD;
             document.getElementById('finalTitle').textContent = win ? '🏆 勝利！' : '😢 敗北…';
@@ -363,6 +371,10 @@
         function update(dt) {
             if (phase !== 'kicking') return;
             shot.time += dt;
+            if (shot.time >= CONTACT_SEC && !shot.contacted) {
+                shot.contacted = true;
+                contactEffect();
+            }
             const landed = shot.time - CONTACT_SEC - FLIGHT_SEC;
             if (landed >= 0 && !shot.announced) {
                 shot.announced = true;
@@ -769,7 +781,7 @@
         function loop(now) {
             const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0;
             lastTime = now;
-            update(dt);
+            if (!comic.stopped()) update(dt);
             draw(now);
             requestAnimationFrame(loop);
         }

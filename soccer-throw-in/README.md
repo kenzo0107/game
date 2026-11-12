@@ -16,18 +16,13 @@ PCではマウスで同じ操作ができるほか、スペースキー長押し
 
 ## 🚀 起動方法
 
-```bash
-# ブラウザでindex.htmlを開く
-open index.html
-```
-
-または、シンプルなHTTPサーバーを起動:
+漫画風の演出をリポジトリ直下の `shared/comic.js` から読み込むため、リポジトリのルートで HTTP サーバーを起動します:
 
 ```bash
-# Python 3を使用
-python -m http.server 8000
+# リポジトリのルートで実行
+python3 -m http.server 8000
 
-# ブラウザで http://localhost:8000 を開く
+# ブラウザで http://localhost:8000/soccer-throw-in/ を開く
 ```
 
 ## 📁 ファイル構成
