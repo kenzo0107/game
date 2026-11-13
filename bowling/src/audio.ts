@@ -33,6 +33,14 @@ export class Sound {
     } catch {
       this.muted = false
     }
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if ('speechSynthesis' in window) speechSynthesis.cancel()
+        void this.ctx?.suspend()
+      } else {
+        void this.ctx?.resume()
+      }
+    })
   }
 
   unlock() {
