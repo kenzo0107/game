@@ -1972,6 +1972,8 @@ const MOLE_RISE_TICKS = 15;
 const MOLE_UP_TICKS = 80;
 const MOLE_REACH_MIN_TICKS = 45;
 const MOLE_REACH_SPREAD_TICKS = 20;
+const MOLE_PACES = [0.6, 1, 1.8];
+const MOLE_FAST_PACE = 1.4;
 
 class MoleBoss extends Boss {
     constructor(profile, level) {
@@ -1984,6 +1986,7 @@ class MoleBoss extends Boss {
         this.fromX = this.x;
         this.toX = this.x;
         this.leavesHole = false;
+        this.approachSpeed = 0;
         this.placeBody();
     }
 
@@ -2016,13 +2019,17 @@ class MoleBoss extends Boss {
             if (t >= MOLE_BURROW_TICKS) {
                 this.enter('rise');
                 comicSfx(this.x + this.width / 2, this.groundBottom() - 70, 'モグッ!', '#A1887F', 18, 30);
+                if (this.approachSpeed >= gameSpeed * MOLE_FAST_PACE) {
+                    addMark(this, '!', 40);
+                    say(this, 'とっしんモグ!', 50);
+                }
             }
         } else if (this.state === 'rise') {
-            this.x -= gameSpeed;
+            this.x -= this.approachSpeed;
             this.visible = t / MOLE_RISE_TICKS;
             if (t >= MOLE_RISE_TICKS) this.enter('up');
         } else if (this.state === 'up') {
-            this.x -= gameSpeed;
+            this.x -= this.approachSpeed;
             // 主人公の後ろや真下で地上に居続けたり穴を掘ったりすると、見えない位置からの接触や落下で死ぬため、すり抜けたら穴を掘らずに潜る
             if (this.x + this.width < player.x) this.dive(false);
             else if (t >= MOLE_UP_TICKS && this.x > player.x + player.width) this.dive(true);
@@ -2046,7 +2053,11 @@ class MoleBoss extends Boss {
         this.fromX = this.x;
         // 出現位置を固定距離にすると低速時は地上にいる間に主人公まで届かず踏めないため、速度から逆算して地上にいる間に必ず届かせる
         const reachTicks = MOLE_RISE_TICKS + MOLE_REACH_MIN_TICKS + Math.random() * MOLE_REACH_SPREAD_TICKS;
-        this.toX = Math.min(player.x + player.width + gameSpeed * reachTicks, view.width - this.width - 20);
+        const front = player.x + player.width;
+        const pace = MOLE_PACES[Math.floor(Math.random() * MOLE_PACES.length)];
+        // 画面端で出現位置が頭打ちになったまま速く迫ると見てから避ける間がないため、届くまでの時間を保てる速さに抑える
+        this.approachSpeed = Math.min(gameSpeed * pace, (view.width - this.width - 20 - front) / reachTicks);
+        this.toX = front + this.approachSpeed * reachTicks;
         this.enter('burrow');
     }
 
