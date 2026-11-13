@@ -1,13 +1,11 @@
 import * as THREE from 'three';
 import { InputState } from './input';
+import { approach, buildJumper, disposeTree, FOOT_OFFSET } from './jumper';
 import { SkydiveStage } from './stages';
 import { Terrain } from './terrain';
 
 type DiveState = 'freefall' | 'canopy' | 'touchdown' | 'landed' | 'crashed';
 export type CrashCause = 'no-chute' | 'hard' | 'ocean';
-
-const BODY_SCALE = 1.6;
-const FOOT_OFFSET = 0.9 * BODY_SCALE;
 
 const FREEFALL_SPEED = 24;
 const DIVE_SPEED = 34;
@@ -39,13 +37,10 @@ const EXIT_SPEED = 8;
 const FREEFALL_CAMERA = { back: 9, up: 12, ahead: 4, down: 30 };
 const CANOPY_CAMERA = { back: 14, up: 16, ahead: 10, down: 16 };
 
-const approach = (current: number, target: number, rate: number, delta: number): number =>
-  target + (current - target) * Math.exp(-rate * delta);
-
 export class Skydiver {
   private root = new THREE.Group();
-  private body = new THREE.Group();
-  private arms: THREE.Mesh[] = [];
+  private body: THREE.Group;
+  private arms: THREE.Mesh[];
   private canopy = new THREE.Group();
   private shadow: THREE.Mesh;
   private jumpPlane: THREE.Group | null;
@@ -74,7 +69,10 @@ export class Skydiver {
     this.velocity = this.forward().multiplyScalar(EXIT_SPEED);
     this.jumpPlaneDirection = this.forward().setY(0.05);
 
-    this.buildBody();
+    ({ body: this.body, arms: this.arms } = buildJumper());
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.16), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+    pack.position.set(0, 0.3, -0.21);
+    this.body.add(pack);
     this.buildCanopy();
     this.root.add(this.body, this.canopy);
     this.root.position.set(start.x, start.y, start.z);
@@ -93,33 +91,6 @@ export class Skydiver {
     this.jumpPlane.position.set(start.x, start.y + 5, start.z + 4);
     this.jumpPlane.rotation.y = this.heading;
     scene.add(this.jumpPlane);
-  }
-
-  private buildBody(): void {
-    const suit = new THREE.MeshLambertMaterial({ color: 0x2266ee });
-    const skin = new THREE.MeshLambertMaterial({ color: 0xf2c9a0 });
-    const helmet = new THREE.MeshLambertMaterial({ color: 0xffdd22 });
-    const pack = new THREE.MeshLambertMaterial({ color: 0x333333 });
-    const part = (geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number) => {
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(x, y, z);
-      this.body.add(mesh);
-      return mesh;
-    };
-
-    part(new THREE.BoxGeometry(0.5, 0.65, 0.28), suit, 0, 0.3, 0);
-    part(new THREE.SphereGeometry(0.17, 12, 10), skin, 0, 0.82, 0.02);
-    part(new THREE.SphereGeometry(0.19, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2), helmet, 0, 0.84, 0);
-    part(new THREE.BoxGeometry(0.42, 0.5, 0.16), pack, 0, 0.3, -0.21);
-    for (const side of [-1, 1]) {
-      part(new THREE.BoxGeometry(0.18, 0.9, 0.2), suit, side * 0.13, -0.45, 0);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.6, 0.14), suit);
-      arm.geometry.translate(0, -0.3, 0);
-      arm.position.set(side * 0.32, 0.58, 0);
-      this.body.add(arm);
-      this.arms.push(arm);
-    }
-    this.body.scale.setScalar(BODY_SCALE);
   }
 
   private buildCanopy(): void {
@@ -183,7 +154,7 @@ export class Skydiver {
   private removeJumpPlane(): void {
     if (!this.jumpPlane) return;
     this.scene.remove(this.jumpPlane);
-    this.disposeTree(this.jumpPlane);
+    disposeTree(this.jumpPlane);
     this.jumpPlane = null;
   }
 
@@ -344,19 +315,10 @@ export class Skydiver {
     return 0;
   }
 
-  private disposeTree(object: THREE.Object3D): void {
-    object.traverse((child) => {
-      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-        child.geometry.dispose();
-        (child.material as THREE.Material).dispose();
-      }
-    });
-  }
-
   public destroy(scene: THREE.Scene): void {
     this.removeJumpPlane();
     scene.remove(this.root, this.shadow);
-    this.disposeTree(this.root);
-    this.disposeTree(this.shadow);
+    disposeTree(this.root);
+    disposeTree(this.shadow);
   }
 }
