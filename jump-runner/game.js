@@ -2023,7 +2023,9 @@ class MoleBoss extends Boss {
             if (t >= MOLE_RISE_TICKS) this.enter('up');
         } else if (this.state === 'up') {
             this.x -= gameSpeed;
-            if (t >= MOLE_UP_TICKS) this.dive(true);
+            // 主人公の後ろや真下で地上に居続けたり穴を掘ったりすると、見えない位置からの接触や落下で死ぬため、すり抜けたら穴を掘らずに潜る
+            if (this.x + this.width < player.x) this.dive(false);
+            else if (t >= MOLE_UP_TICKS && this.x > player.x + player.width) this.dive(true);
         }
         this.placeBody();
     }
