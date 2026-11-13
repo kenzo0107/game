@@ -3124,6 +3124,21 @@ function switchBgm(type) {
     bgmPlayers[type]();
 }
 
+// BGM はタイマーで音を足していくため、AudioContext を止めるだけでは裏で溜まった音が復帰時にまとめて鳴る。タイマーも止める
+let musicPausedByHidden = false;
+document.addEventListener('visibilitychange', () => {
+    if (!audioContext) return;
+    if (document.hidden) {
+        musicPausedByHidden = musicInterval !== null;
+        stopMusic();
+        audioContext.suspend();
+        return;
+    }
+    audioContext.resume();
+    if (musicPausedByHidden) bgmPlayers[currentBgmType]();
+    musicPausedByHidden = false;
+});
+
 // 初期化
 function init() {
     boss = null;
