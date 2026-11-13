@@ -20,6 +20,11 @@ export class Sound {
     const unlock = () => this.context();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
+    document.addEventListener('visibilitychange', () => {
+      if (!this.ctx) return;
+      if (document.hidden) void this.ctx.suspend();
+      else void this.ctx.resume();
+    });
   }
 
   private context(): AudioContext | null {
