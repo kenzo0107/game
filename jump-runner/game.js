@@ -1970,6 +1970,8 @@ const MOLE_DIVE_TICKS = 20;
 const MOLE_BURROW_TICKS = 60;
 const MOLE_RISE_TICKS = 15;
 const MOLE_UP_TICKS = 80;
+const MOLE_REACH_MIN_TICKS = 45;
+const MOLE_REACH_SPREAD_TICKS = 20;
 
 class MoleBoss extends Boss {
     constructor(profile, level) {
@@ -2021,7 +2023,6 @@ class MoleBoss extends Boss {
             if (t >= MOLE_RISE_TICKS) this.enter('up');
         } else if (this.state === 'up') {
             this.x -= gameSpeed;
-            if (t === 35) this.throwDirt();
             if (t >= MOLE_UP_TICKS) this.dive(true);
         }
         this.placeBody();
@@ -2041,14 +2042,10 @@ class MoleBoss extends Boss {
 
     startBurrow() {
         this.fromX = this.x;
-        this.toX = Math.min(player.x + 260 + Math.random() * 160, view.width - this.width - 20);
+        // 出現位置を固定距離にすると低速時は地上にいる間に主人公まで届かず踏めないため、速度から逆算して地上にいる間に必ず届かせる
+        const reachTicks = MOLE_RISE_TICKS + MOLE_REACH_MIN_TICKS + Math.random() * MOLE_REACH_SPREAD_TICKS;
+        this.toX = Math.min(player.x + player.width + gameSpeed * reachTicks, view.width - this.width - 20);
         this.enter('burrow');
-    }
-
-    throwDirt() {
-        const bullet = new Bullet(this.x, this.y + 10);
-        bullet.setArcVelocity(-3, -7);
-        bullets.push(bullet);
     }
 
     onStomped() {
