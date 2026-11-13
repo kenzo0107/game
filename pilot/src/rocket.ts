@@ -18,7 +18,7 @@ const STRAFE_SPEED = 9;
 const MOVE_RATE = 1.4;
 const TURN_SPEED = 1.4;
 
-const FUEL_BURN = { climb: 3, hover: 1.5, descend: 0.8 };
+const FUEL_BURN = { climb: 2.4, hover: 1.2, descend: 0.6 };
 const THRUST = { climb: 1, hover: 0.6, descend: 0.3 };
 
 const HARD_LANDING_SPEED = 5;
