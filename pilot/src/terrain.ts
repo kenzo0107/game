@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FlightStage, SkydiveStage, StageConfig } from './stages';
+import { FlightStage, LandingTarget, StageConfig } from './stages';
 
 export type Surface = 'runway' | 'grass' | 'ocean';
 
@@ -49,9 +49,17 @@ export class Terrain {
 
     if (this.stage.kind === 'flight') this.buildRunway(this.stage.runway);
     else this.buildTarget(this.stage.target);
+    if (this.stage.kind === 'rocket') this.buildLaunchPad(this.stage.start.x, this.stage.start.z);
   }
 
-  private buildTarget(target: SkydiveStage['target']): void {
+  private buildLaunchPad(x: number, z: number): void {
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(5, 32), new THREE.MeshLambertMaterial({ color: 0x777777 }));
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(x, GROUND_LEVEL + 0.05, z);
+    this.group.add(pad);
+  }
+
+  private buildTarget(target: LandingTarget): void {
     const bands = 4;
     for (let i = 0; i < bands; i++) {
       const outer = target.radius * (1 - i / bands);

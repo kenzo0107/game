@@ -13,6 +13,7 @@ export class Sound {
   private noise: AudioBuffer | null = null;
   private rolling: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private wind: { gain: GainNode; filter: BiquadFilterNode } | null = null;
+  private thrust: { gain: GainNode; filter: BiquadFilterNode } | null = null;
   private muted = readArcadeMute();
 
   constructor() {
@@ -111,24 +112,40 @@ export class Sound {
     this.rolling.filter.frequency.setTargetAtTime((rough ? 250 : 500) + speed * (rough ? 30 : 70), t, 0.05);
   }
 
+  private noiseLoop(ctx: AudioContext, type: BiquadFilterType, q: number): { gain: GainNode; filter: BiquadFilterNode } {
+    const filter = ctx.createBiquadFilter();
+    filter.type = type;
+    filter.Q.value = q;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    const source = this.noiseSource(ctx, true);
+    source.connect(filter).connect(gain).connect(ctx.destination);
+    source.start();
+    return { gain, filter };
+  }
+
   public setWind(amount: number): void {
     const ctx = this.ctx;
     if (!ctx || this.muted) return;
     if (!this.wind) {
       if (amount === 0) return;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.Q.value = 0.7;
-      const gain = ctx.createGain();
-      gain.gain.value = 0;
-      const source = this.noiseSource(ctx, true);
-      source.connect(filter).connect(gain).connect(ctx.destination);
-      source.start();
-      this.wind = { gain, filter };
+      this.wind = this.noiseLoop(ctx, 'bandpass', 0.7);
     }
     const t = ctx.currentTime;
     this.wind.gain.gain.setTargetAtTime(amount * 0.22, t, 0.2);
     this.wind.filter.frequency.setTargetAtTime(300 + amount * 900, t, 0.2);
+  }
+
+  public setThrust(amount: number): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    if (!this.thrust) {
+      if (amount === 0) return;
+      this.thrust = this.noiseLoop(ctx, 'lowpass', 1);
+    }
+    const t = ctx.currentTime;
+    this.thrust.gain.gain.setTargetAtTime(amount * 0.3, t, 0.08);
+    this.thrust.filter.frequency.setTargetAtTime(250 + amount * 700, t, 0.08);
   }
 
   public parachute(): void {

@@ -20,12 +20,24 @@ export interface FlightStage extends StageBase {
   fuel: number;
 }
 
-export interface SkydiveStage extends StageBase {
-  kind: 'skydive';
-  target: { x: number; z: number; radius: number };
+export interface LandingTarget {
+  x: number;
+  z: number;
+  radius: number;
 }
 
-export type StageConfig = FlightStage | SkydiveStage;
+export interface SkydiveStage extends StageBase {
+  kind: 'skydive';
+  target: LandingTarget;
+}
+
+export interface RocketStage extends StageBase {
+  kind: 'rocket';
+  target: LandingTarget;
+  fuel: number;
+}
+
+export type StageConfig = FlightStage | SkydiveStage | RocketStage;
 
 export const STAGES: StageConfig[] = [
   {
@@ -116,6 +128,21 @@ export const STAGES: StageConfig[] = [
       { x: 10, y: 360, z: -205, heading: 0 },
       { x: -15, y: 280, z: -165, heading: 0 },
       { x: 0, y: 200, z: -120, heading: 0 },
+    ],
+  },
+  {
+    kind: 'rocket',
+    name: 'ロケットベルト',
+    description: 'ロケットベルトで空中散歩！ 上昇ボタンで浮かび、リングをくぐって的にそっと降りよう',
+    island: { x: 0, z: 40, width: 260, depth: 360 },
+    target: { x: -30, z: 180, radius: 14 },
+    start: { x: 0, y: -50, z: -110, heading: 0 },
+    wind: { x: 0.6, z: 0 },
+    fuel: 100,
+    rings: [
+      { x: 0, y: -38, z: -40, heading: 0 },
+      { x: 30, y: -28, z: 40, heading: 0.36 },
+      { x: 0, y: -20, z: 120, heading: -0.4 },
     ],
   },
 ];

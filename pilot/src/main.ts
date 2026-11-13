@@ -7,6 +7,7 @@ import { Explosion } from './explosion';
 import { Terrain } from './terrain';
 import { Rings } from './rings';
 import { Music } from './music';
+import { RocketBelt, RocketCrashCause } from './rocket';
 import { SONGS } from './songs';
 import { CrashCause, Skydiver } from './skydiver';
 import { Sound } from './sound';
@@ -76,15 +77,18 @@ const LOW_ALTITUDE = 12;
 const LOW_ALTITUDE_ALERT_INTERVAL = 0.9;
 
 const CHUTE_WARNING_ALTITUDE = 150;
+const LOW_FUEL = 20;
 
 const TOUCH_LABELS: Record<StageConfig['kind'], Record<string, string>> = {
   flight: { throttleDown: '減速', throttleUp: '加速', yawLeft: '機首←', yawRight: '機首→' },
   skydive: { throttleDown: 'ゆっくり', throttleUp: '急降下', yawLeft: '向き←', yawRight: '向き→' },
+  rocket: { throttleDown: '下降', throttleUp: '上昇', yawLeft: '向き←', yawRight: '向き→' },
 };
 
 const LOW_WARNINGS: Record<StageConfig['kind'], string> = {
   flight: '⚠ 高度が低すぎる！ 機首を上げよう',
   skydive: '⚠ パラシュートを開こう！',
+  rocket: '⚠ 燃料が少ない！ 的に降りよう',
 };
 
 const CRASH_MESSAGES: Record<CrashCause, [string, string]> = {
@@ -92,6 +96,14 @@ const CRASH_MESSAGES: Record<CrashCause, [string, string]> = {
   hard: ['着地が速すぎた…', 'パラシュートはもっと高いところで開こう'],
   ocean: ['海に落ちた…', '島の上に降りよう'],
 };
+
+const ROCKET_CRASH_MESSAGES: Record<RocketCrashCause, [string, string]> = {
+  hard: ['着地が速すぎた…', '地面の近くでは下降ボタンをはなし、止まってからゆっくり降りよう'],
+  ocean: ['海に落ちた…', '島の上に降りよう'],
+  fuel: ['燃料が切れた…', '燃料が残っているうちに的へ降りよう'],
+};
+
+const fuelColor = (fuel: number): string => (fuel <= 0 ? '#ff0000' : fuel < LOW_FUEL ? '#ff6600' : '#ffff00');
 
 const starText = (count: number): string => '★'.repeat(count) + '☆'.repeat(3 - count);
 
@@ -114,7 +126,7 @@ class Game {
   private stageIndex = 0;
   private terrain!: Terrain;
   private rings!: Rings;
-  private vehicle!: Aircraft | Skydiver;
+  private vehicle!: Aircraft | Skydiver | RocketBelt;
   private explosion: Explosion | null = null;
   private primaryAction: (() => void) | null = null;
   private bannerTimer = 0;
@@ -154,18 +166,25 @@ class Game {
     this.explosion = null;
     this.terrain = new Terrain(this.scene, stage);
     this.rings = new Rings(this.scene, stage.rings, stage.kind === 'skydive');
-    this.vehicle =
-      stage.kind === 'flight'
-        ? new Aircraft(this.scene, this.terrain, stage.start, stage.fuel, stage.wind, (strength) =>
-            this.sound.touchdown(strength),
-          )
-        : new Skydiver(
-            this.scene,
-            this.terrain,
-            stage,
-            () => this.sound.parachute(),
-            () => this.sound.thud(),
-          );
+    switch (stage.kind) {
+      case 'flight':
+        this.vehicle = new Aircraft(this.scene, this.terrain, stage.start, stage.fuel, stage.wind, (strength) =>
+          this.sound.touchdown(strength),
+        );
+        break;
+      case 'skydive':
+        this.vehicle = new Skydiver(
+          this.scene,
+          this.terrain,
+          stage,
+          () => this.sound.parachute(),
+          () => this.sound.thud(),
+        );
+        break;
+      case 'rocket':
+        this.vehicle = new RocketBelt(this.scene, this.terrain, stage, () => this.sound.thud());
+        break;
+    }
     this.applyMode(stage.kind);
     this.stopLoops();
     this.updateCamera();
@@ -184,6 +203,7 @@ class Game {
   private stopLoops(): void {
     this.sound.setRolling(0, null);
     this.sound.setWind(0);
+    this.sound.setThrust(0);
   }
 
   private startStage(index: number): void {
@@ -256,10 +276,14 @@ class Game {
     this.music.setMode('off');
     let title = '墜落！';
     const lines = ['Rキー または「もう一度」でやり直し'];
-    if (this.vehicle instanceof Aircraft) {
-      this.explosion = new Explosion(this.scene, this.vehicle.getPosition());
+    const vehicle = this.vehicle;
+    if (vehicle instanceof Aircraft) {
+      this.explosion = new Explosion(this.scene, vehicle.getPosition());
     } else {
-      const [message, hint] = CRASH_MESSAGES[this.vehicle.getCrashCause() ?? 'no-chute'];
+      const [message, hint] =
+        vehicle instanceof Skydiver
+          ? CRASH_MESSAGES[vehicle.getCrashCause() ?? 'no-chute']
+          : ROCKET_CRASH_MESSAGES[vehicle.getCrashCause() ?? 'hard'];
       title = message;
       lines.unshift(hint);
     }
@@ -320,7 +344,7 @@ class Game {
   }
 
   private updateCamera(): void {
-    if (this.vehicle instanceof Skydiver) {
+    if (!(this.vehicle instanceof Aircraft)) {
       this.vehicle.placeCamera(this.camera);
       return;
     }
@@ -350,18 +374,25 @@ class Game {
       this.setText('chute', vehicle.isDeployed() ? 'ひらいた' : 'まだ', vehicle.isDeployed() ? '#ffff00' : '#ff6600');
       return;
     }
+    if (vehicle instanceof RocketBelt) {
+      this.setText('fuel', vehicle.getFuel().toFixed(1), fuelColor(vehicle.getFuel()));
+      this.setText('vertical-speed', vehicle.getVerticalSpeed().toFixed(1));
+      this.setText('target', vehicle.getTargetDistance().toFixed(1));
+      return;
+    }
     const fuel = vehicle.getFuel();
     this.setText('speed', vehicle.getSpeed().toFixed(1));
     this.setText('throttle', (vehicle.getThrottle() * 100).toFixed(0));
     this.setText('pitch', ((vehicle.getPitchAngle() * 180) / Math.PI).toFixed(1));
     this.setText('roll', ((vehicle.getRollAngle() * 180) / Math.PI).toFixed(1));
-    this.setText('fuel', fuel.toFixed(1), fuel <= 0 ? '#ff0000' : fuel < 20 ? '#ff6600' : '#ffff00');
+    this.setText('fuel', fuel.toFixed(1), fuelColor(fuel));
   }
 
   private isTooLow(): boolean {
     const vehicle = this.vehicle;
     if (this.phase !== 'playing') return false;
     if (vehicle instanceof Skydiver) return vehicle.isFreefalling() && vehicle.getAltitude() < CHUTE_WARNING_ALTITUDE;
+    if (vehicle instanceof RocketBelt) return vehicle.isFlying() && vehicle.getFuel() < LOW_FUEL;
     const position = vehicle.getPosition();
     return vehicle.isFlying() && vehicle.getAltitude() < LOW_ALTITUDE && !this.terrain.isOnApproach(position.x, position.z);
   }
@@ -391,8 +422,10 @@ class Game {
       if (vehicle instanceof Aircraft) {
         const contact = vehicle.getGroundContact();
         this.sound.setRolling(contact?.speed ?? 0, contact?.surface ?? null);
-      } else {
+      } else if (vehicle instanceof Skydiver) {
         this.sound.setWind(vehicle.getWindNoise());
+      } else {
+        this.sound.setThrust(vehicle.getThrustNoise());
       }
       if (this.rings.update(vehicle.getPosition()) > 0) this.sound.ring();
 

@@ -65,8 +65,11 @@
     #touch-controls {
       display: none;
     }
+    body:not([data-mode="flight"]) .flight-only,
     body:not([data-mode="skydive"]) .skydive-only,
-    body[data-mode="skydive"] .flight-only {
+    body:not([data-mode="rocket"]) .rocket-only,
+    body[data-mode="skydive"] .has-fuel,
+    body[data-mode="flight"] .has-target {
       display: none !important;
     }
     @media (pointer: coarse) {
@@ -269,6 +272,7 @@
     <div>←/→: ロール（かたむけて左右旋回）</div>
     <div>Q/E: ヨー（機首左右）</div>
     <div>着陸後: S でブレーキ、Q/E でハンドル</div>
+    <div>ロケットベルト: W 上昇 / S 下降 / 矢印 移動</div>
     <div>Enter: 決定 / R: やり直し</div>
   </div>
   <div id="hud">
@@ -277,8 +281,8 @@
     <div>リング: <span id="rings">0</span></div>
     <div>風: <span id="wind">なし</span></div>
     <div>高度: <span id="altitude">0</span></div>
+    <div class="has-fuel">燃料: <span id="fuel">100</span>%</div>
     <div class="flight-only">
-      <div>燃料: <span id="fuel">100</span>%</div>
       <div>速度: <span id="speed">0</span></div>
       <div>スロットル: <span id="throttle">0</span>%</div>
       <div>ピッチ角: <span id="pitch">0</span>°</div>
@@ -286,9 +290,10 @@
     </div>
     <div class="skydive-only">
       <div>落下速度: <span id="fall-speed">0</span></div>
-      <div>的まで: <span id="target">0</span></div>
       <div>パラシュート: <span id="chute">まだ</span></div>
     </div>
+    <div class="rocket-only">上下速度: <span id="vertical-speed">0</span></div>
+    <div class="has-target">的まで: <span id="target">0</span></div>
   </div>
   <div id="touch-controls">
     <div id="stick"><div id="stick-knob"></div></div>
