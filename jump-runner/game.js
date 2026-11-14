@@ -2519,7 +2519,7 @@ function spawnStepUpGuide(edgeX, fromHeight, toHeight) {
     const g = player.gravity;
     const v = -player.jumpPower;
     const landFrames = (v + Math.sqrt(v * v - 2 * g * (toHeight - fromHeight))) / g;
-    // 段差に着くまでにスコアが進んで速度が上がるため、その分を見込む（1 フレームで score+1、100 ごとに +0.2）
+    // 段差に着くまでにスコアが進んで速度が上がるため、その分を見込む（1 フレームで score+1、100 ごとに SPEED_STEP）
     const framesToEdge = (edgeX - player.x - player.width) / gameSpeed;
     const speed = gameSpeed + speedGainPerFrame() * framesToEdge;
     const centerY = player.groundY - fromHeight + player.height / 2;
@@ -2653,8 +2653,11 @@ const ENDING_DELAY_TICKS = 120;
 let endingTimer = 0;
 
 // 序盤は操作に慣れてもらうため、最初のボスが出るまでは速くしない。ボス戦中はスコアが増えないので、実際に速くなるのは倒したあとから
+const SPEED_STEP = 0.1;
+// 上限なしに速くすると、反応が追いつかず遊べなくなる
+const MAX_GAME_SPEED = 4;
 function speedGainPerFrame() {
-    return bossLevel > 0 ? 0.002 : 0;
+    return bossLevel > 0 && gameSpeed < MAX_GAME_SPEED ? SPEED_STEP / 100 : 0;
 }
 let nextBossScore = 3000; // 次にボスが出現するスコア
 
@@ -3528,7 +3531,7 @@ function tick() {
     if (!boss) {
         score++;
         if (score % 100 === 0 && speedGainPerFrame() > 0) {
-            gameSpeed += 0.2;
+            gameSpeed = Math.min(gameSpeed + SPEED_STEP, MAX_GAME_SPEED);
         }
     }
     if (score >= nextMilestone) {
