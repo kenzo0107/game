@@ -1,0 +1,249 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #1b1446;
+    --panel: #2a2066;
+    --edge: #4b3fa8;
+    --text: #f4f1ff;
+    --muted: #a9a2d6;
+    --o: #29e7ff;
+    --x: #ff3ea5;
+    --yellow: #ffd23f;
+}
+
+html,
+body {
+    min-height: 100%;
+    overscroll-behavior: none;
+}
+
+body {
+    font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif;
+    color: var(--text);
+    background:
+        radial-gradient(600px 400px at 0% 0%, rgba(41, 231, 255, 0.18), transparent 60%),
+        radial-gradient(600px 400px at 100% 100%, rgba(255, 62, 165, 0.18), transparent 60%),
+        var(--bg);
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 480px;
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding:
+        max(20px, env(safe-area-inset-top))
+        max(16px, env(safe-area-inset-right))
+        max(20px, env(safe-area-inset-bottom))
+        max(16px, env(safe-area-inset-left));
+}
+
+h1 {
+    font-size: 1.6rem;
+    letter-spacing: 0.1em;
+    color: var(--yellow);
+    text-shadow: 3px 3px 0 #000;
+}
+
+button {
+    font: inherit;
+    font-weight: bold;
+    color: var(--text);
+    background: var(--panel);
+    border: 2px solid var(--edge);
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.modes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    width: 100%;
+}
+
+.modes button {
+    padding: 8px 4px;
+    font-size: 0.8rem;
+}
+
+.modes button[aria-checked="true"] {
+    color: #000;
+    background: var(--yellow);
+    border-color: var(--yellow);
+}
+
+.score {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    width: 100%;
+}
+
+.player {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    background: var(--panel);
+    border: 2px solid transparent;
+    border-radius: 10px;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.player .mark {
+    font-size: 1.4rem;
+    font-weight: bold;
+}
+
+.player b {
+    font-size: 1.4rem;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.player.o .mark { color: var(--o); }
+.player.x .mark { color: var(--x); }
+.player.o.turn { border-color: var(--o); transform: scale(1.05); }
+.player.x.turn { border-color: var(--x); transform: scale(1.05); }
+
+.message {
+    min-height: 1.6em;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.message.win { color: var(--yellow); animation: pop 0.4s ease-out; }
+
+@keyframes pop {
+    0% { transform: scale(0.6); }
+    70% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+.board {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: min(100%, 60dvh, 420px);
+    aspect-ratio: 1;
+    padding: 8px;
+    background: var(--edge);
+    border-radius: 16px;
+    box-shadow: 6px 6px 0 #000;
+}
+
+.cell {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    background: var(--bg);
+    border: 0;
+    border-radius: 10px;
+}
+
+.cell:not(:disabled):hover {
+    background: var(--panel);
+}
+
+.cell:disabled {
+    cursor: default;
+}
+
+.cell svg {
+    width: 70%;
+    height: 70%;
+    overflow: visible;
+}
+
+.cell .stroke {
+    fill: none;
+    stroke-width: 14;
+    stroke-linecap: round;
+    stroke-dasharray: 300;
+    stroke-dashoffset: 300;
+    animation: draw 0.3s ease-out forwards;
+}
+
+.cell.o .stroke { stroke: var(--o); }
+.cell.x .stroke { stroke: var(--x); }
+.cell.x .stroke + .stroke { animation-delay: 0.15s; }
+.cell.lose { opacity: 0.35; }
+.cell.win { animation: flash 0.6s ease-in-out 3; }
+
+@keyframes draw {
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes flash {
+    50% { background: var(--panel); }
+}
+
+.win-line {
+    position: absolute;
+    inset: 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    pointer-events: none;
+    overflow: visible;
+}
+
+.win-line line {
+    stroke: var(--yellow);
+    stroke-width: 0.12;
+    stroke-linecap: round;
+    stroke-dasharray: 5;
+    stroke-dashoffset: 5;
+    visibility: hidden;
+}
+
+.win-line.show line {
+    visibility: visible;
+    animation: draw 0.4s ease-out forwards;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+}
+
+#restart {
+    color: #000;
+    background: var(--yellow);
+    border-color: var(--yellow);
+    box-shadow: 4px 4px 0 #000;
+}
+
+#restart:active {
+    transform: translate(4px, 4px);
+    box-shadow: none;
+}
+
+.ghost {
+    color: var(--muted);
+    background: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0s !important;
+        animation-delay: 0s !important;
+        transition: none !important;
+    }
+}

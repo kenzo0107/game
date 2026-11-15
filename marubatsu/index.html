@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1b1446">
+    <title>まるばつゲーム</title>
+    <script src="../shared/audio-session.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app">
+        <h1>まるばつゲーム</h1>
+
+        <div class="modes" role="radiogroup" aria-label="あいて">
+            <button type="button" data-mode="easy" role="radio">CPU よわい</button>
+            <button type="button" data-mode="normal" role="radio">CPU ふつう</button>
+            <button type="button" data-mode="hard" role="radio">CPU つよい</button>
+            <button type="button" data-mode="pvp" role="radio">ふたりで</button>
+        </div>
+
+        <div class="score" aria-live="polite">
+            <div class="player o"><span class="mark">○</span><span id="name-o">あなた</span><b id="score-o">0</b></div>
+            <div class="player draw"><span class="mark">－</span><span>ひきわけ</span><b id="score-draw">0</b></div>
+            <div class="player x"><span class="mark">×</span><span id="name-x">CPU</span><b id="score-x">0</b></div>
+        </div>
+
+        <p class="message" id="message" aria-live="polite"></p>
+
+        <div class="board" id="board" aria-label="ばん">
+            <svg class="win-line" id="win-line" viewBox="0 0 3 3" aria-hidden="true"><line /></svg>
+        </div>
+
+        <div class="actions">
+            <button type="button" id="restart">もういちど</button>
+            <button type="button" id="reset" class="ghost">スコアをリセット</button>
+        </div>
+    </main>
+    <script type="module" src="game.js"></script>
+</body>
+</html>
