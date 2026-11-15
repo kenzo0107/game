@@ -24,7 +24,12 @@ const AIM_PREVIEW_SEC = 0.35;
 const SHOT_TIMEOUT_SEC = 4;
 const NEXT_BALL_DELAY_SEC = 0.35;
 const CHEER_SEC = 1.6;
-const JUMP = { sec: 0.55, height: 0.3 };
+const PLAYER_GRAVITY = 12;
+const JUMP_SPEED = 3.6;
+const SHOT_HOP_SPEED = 2.7;
+const MAX_JUMPS = 2;
+const SPIN = { sec: 0.4, radius: 0.4 };
+const HELD_SPIN_SPEED = 18;
 const MAX_DIP = 0.15;
 const BACKSPIN = 14;
 const SKIN = '#f5c99b';
@@ -63,7 +68,8 @@ const state = {
     ball: null,
     flying: false,
     shotAge: 0,
-    jumpAt: -Infinity,
+    player: { y: 0, vy: 0, jumps: 0 },
+    spinAt: -Infinity,
     readyIn: 0,
     aim: null,
     popups: [],
@@ -170,7 +176,20 @@ function play(name) {
     } catch {}
 }
 
-const handPosition = () => ({ x: state.shooterX + HAND.dx, y: HAND.y });
+const handPosition = () => ({ x: state.shooterX + HAND.dx, y: HAND.y + state.player.y });
+const spinProgress = () => (state.clock - state.spinAt) / SPIN.sec;
+
+function heldBall() {
+    const hand = handPosition();
+    const k = spinProgress();
+    if (k < 0 || k >= 1) return { ...hand, rot: state.player.y > 0 ? state.clock * HELD_SPIN_SPEED : 0 };
+    const angle = k * Math.PI * 2;
+    return {
+        x: hand.x + Math.sin(angle) * SPIN.radius,
+        y: hand.y - SPIN.radius + Math.cos(angle) * SPIN.radius,
+        rot: angle * 2,
+    };
+}
 const canThrow = () => state.phase === 'playing' && !state.flying && state.readyIn <= 0 && state.timeLeft > 0;
 
 const shooterXAt = (distance) => hoopCenterX(HOOP) - distance;
@@ -195,6 +214,8 @@ function startGame() {
         aim: null,
         popups: [],
         cheer: 0,
+        player: { y: 0, vy: 0, jumps: 0 },
+        spinAt: -Infinity,
     });
     overlay.hidden = true;
     play('start');
@@ -225,12 +246,28 @@ function addPopup(text, color) {
 
 function throwBall(dragX, dragY) {
     const { vx, vy } = launchVelocity(dragX, dragY);
-    const hand = handPosition();
-    state.ball = { ...createBall(hand.x, hand.y, vx, vy), rot: 0 };
+    const held = heldBall();
+    state.ball = { ...createBall(held.x, held.y, vx, vy), rot: held.rot };
     state.flying = true;
     state.shotAge = 0;
     state.shotFromX = state.shooterX;
-    state.jumpAt = state.clock;
+    if (state.player.y === 0) state.player.vy = SHOT_HOP_SPEED;
+}
+
+function jump() {
+    const { player } = state;
+    if (player.jumps >= MAX_JUMPS) return;
+    player.vy = JUMP_SPEED;
+    player.jumps += 1;
+    if (player.jumps === MAX_JUMPS) state.spinAt = state.clock;
+}
+
+function updatePlayer(dt) {
+    const { player } = state;
+    if (player.y === 0 && player.vy === 0) return;
+    player.vy -= PLAYER_GRAVITY * dt;
+    player.y += player.vy * dt;
+    if (player.y <= 0) Object.assign(player, { y: 0, vy: 0, jumps: 0 });
 }
 
 function resolveShot() {
@@ -289,6 +326,7 @@ function update(dt) {
         }
         if (state.timeLeft <= 0 && !state.flying) endGame();
     }
+    updatePlayer(dt);
     if (state.flying) updateBall(dt);
     state.readyIn = Math.max(0, state.readyIn - dt);
     state.netWobble = Math.max(0, state.netWobble - dt * 1.5);
@@ -432,13 +470,8 @@ function drawNetAndRim() {
     line(front.x, RIM_HEIGHT, back.x, RIM_HEIGHT, 0.05, '#ff5a1f');
 }
 
-function jumpHeight() {
-    const k = (state.clock - state.jumpAt) / JUMP.sec;
-    return k >= 0 && k <= 1 ? JUMP.height * 4 * k * (1 - k) : 0;
-}
-
 function crouchDepth() {
-    if (!state.aim || !canThrow()) return 0;
+    if (!state.aim || !canThrow() || state.player.y > 0) return 0;
     const drag = dragInWorld(state.aim);
     return Math.min(Math.hypot(drag.x, drag.y) / 1.5, 1) * MAX_DIP;
 }
@@ -450,7 +483,7 @@ function limb(from, mid, to, width, color) {
 
 function drawPlayer() {
     const x = state.shooterX;
-    const air = jumpHeight();
+    const air = state.player.y;
     const dip = crouchDepth();
     const lift = air - dip;
     const hip = { x, y: 0.9 + lift };
@@ -501,7 +534,7 @@ function drawArms(shoulder) {
         limb(shoulder, { x: shoulder.x + 0.06, y: shoulder.y - 0.3 }, { x: shoulder.x + 0.1, y: shoulder.y - 0.55 }, 0.09, SKIN);
         return;
     }
-    const ball = handPosition();
+    const ball = heldBall();
     const under = { x: ball.x - 0.03, y: ball.y - BALL_RADIUS };
     limb(shoulder, { x: shoulder.x + 0.16, y: (shoulder.y + under.y) / 2 - 0.05 }, under, 0.09, SKIN);
     const side = { x: ball.x - BALL_RADIUS, y: ball.y + 0.02 };
@@ -537,7 +570,7 @@ function drawAim() {
     const drag = dragInWorld(aim);
     if (Math.hypot(drag.x, drag.y) < MIN_DRAG) return;
     const { vx, vy } = launchVelocity(drag.x, drag.y);
-    const hand = handPosition();
+    const hand = heldBall();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     for (let t = 0.05; t <= AIM_PREVIEW_SEC; t += 0.05) {
         const x = hand.x + vx * t;
@@ -571,7 +604,10 @@ function draw() {
     drawPlayer();
     drawAim();
     if (state.ball) drawBall(state.ball.x, state.ball.y, state.ball.rot);
-    else if (state.readyIn <= 0) drawBall(handPosition().x, handPosition().y, 0);
+    else if (state.readyIn <= 0) {
+        const held = heldBall();
+        drawBall(held.x, held.y, held.rot);
+    }
     drawNetAndRim();
     drawPopups();
 }
@@ -612,7 +648,9 @@ canvas.addEventListener('pointerup', (e) => {
     aim.x = e.clientX;
     aim.y = e.clientY;
     const drag = dragInWorld(aim);
-    if (canThrow() && Math.hypot(drag.x, drag.y) >= MIN_DRAG) throwBall(drag.x, drag.y);
+    if (!canThrow()) return;
+    if (Math.hypot(drag.x, drag.y) >= MIN_DRAG) throwBall(drag.x, drag.y);
+    else jump();
 });
 
 canvas.addEventListener('pointercancel', (e) => {
