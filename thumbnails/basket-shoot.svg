@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#14102e"/>
+      <stop offset="1" stop-color="#2d2366"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d99a55"/>
+      <stop offset="1" stop-color="#a8682f"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="180" fill="url(#wall)"/>
+  <rect y="96" width="320" height="14" fill="#fff" opacity=".05"/>
+  <rect y="146" width="320" height="34" fill="url(#floor)"/>
+  <g stroke="#50280a" stroke-opacity=".25">
+    <path d="M20 146 L10 180 M60 146 L50 180 M100 146 L90 180 M140 146 L130 180 M180 146 L170 180 M220 146 L210 180 M260 146 L250 180 M300 146 L290 180"/>
+  </g>
+  <path d="M296 146 V58" stroke="#3b4a6b" stroke-width="8"/>
+  <path d="M296 146 V104" stroke="#2f6bff" stroke-width="14"/>
+  <path d="M276 64 H296" stroke="#3b4a6b" stroke-width="5"/>
+  <rect x="272" y="44" width="5" height="52" fill="#f4f1ff" stroke="#c0392b" stroke-width="2"/>
+  <g stroke="#fff" stroke-opacity=".85" stroke-width="1.5">
+    <path d="M244 88 L249 108 M251 88 L254 108 M258 88 L259 108 M265 88 L263 108"/>
+    <path d="M245 95 H264 M247 102 H263"/>
+  </g>
+  <path d="M242 88 H272" stroke="#ff5a1f" stroke-width="4" stroke-linecap="round"/>
+  <path d="M64 116 Q150 -6 252 76" fill="none" stroke="#ffd23f" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>
+  <g transform="translate(252 74)">
+    <circle r="11" fill="#e8731c" stroke="#3a1a05" stroke-width="2"/>
+    <path d="M-11 0 H11 M0 -11 V11 M-8 -7 Q0 -2 8 -7" fill="none" stroke="#3a1a05" stroke-width="1.6"/>
+  </g>
+  <g stroke-linecap="round">
+    <path d="M44 146 L49 112 M56 146 L51 112" stroke="#f5c99b" stroke-width="6"/>
+    <path d="M50 114 V88" stroke="#2f6bff" stroke-width="13"/>
+    <path d="M52 90 L64 72" stroke="#f5c99b" stroke-width="4"/>
+  </g>
+  <circle cx="50" cy="78" r="6" fill="#f5c99b"/>
+  <path d="M44 77 A6 6 0 0 1 56 77 Z" fill="#2b1a0e"/>
+  <text x="50" y="104" fill="#fff" font-family="system-ui, sans-serif" font-weight="bold" font-size="8" text-anchor="middle">7</text>
+  <g font-family="system-ui, sans-serif" font-weight="bold" text-anchor="middle" stroke="#000" stroke-width="3" paint-order="stroke">
+    <text x="214" y="40" font-size="22" fill="#ffd23f">+3</text>
+  </g>
+</svg>
