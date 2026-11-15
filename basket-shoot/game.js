@@ -21,6 +21,18 @@ const MIN_DRAG = 0.25;
 const AIM_PREVIEW_SEC = 0.35;
 const SHOT_TIMEOUT_SEC = 4;
 const NEXT_BALL_DELAY_SEC = 0.35;
+const CHEER_SEC = 1.6;
+const FENCE = { bottom: 0.7, top: 1.15 };
+const FANS = [
+    { x: 0.2, shirt: '#ff3ea5', hair: '#2b1a0e' },
+    { x: 1.4, shirt: '#29e7ff', hair: '#f2c14e' },
+    { x: 2.6, shirt: '#ffd23f', hair: '#5a3418' },
+    { x: 3.8, shirt: '#7cf06b', hair: '#2b1a0e' },
+    { x: 5.0, shirt: '#ff8a2b', hair: '#8b4a2b' },
+    { x: 6.2, shirt: '#b98cff', hair: '#2b1a0e' },
+    { x: 7.4, shirt: '#ff5a5a', hair: '#f2c14e' },
+];
+const CHEER_WORDS = ['ナイス！', 'やったー！', 'すごーい！', 'いいぞ！'];
 
 const canvas = document.getElementById('court');
 const ctx = canvas.getContext('2d');
@@ -48,6 +60,9 @@ const state = {
     popups: [],
     netWobble: 0,
     clock: 0,
+    cheer: 0,
+    cheerFan: 0,
+    cheerText: '',
 };
 
 function loadNumber(key) {
@@ -96,7 +111,7 @@ function tone(freq, length, type, volume, delay = 0) {
     osc.stop(t + length);
 }
 
-function noise(length, freq, volume) {
+function noise(length, freq, volume, delay = 0) {
     const ac = audioContext();
     const buffer = ac.createBuffer(1, Math.floor(ac.sampleRate * length), ac.sampleRate);
     const data = buffer.getChannelData(0);
@@ -109,7 +124,7 @@ function noise(length, freq, volume) {
     filter.frequency.value = freq;
     gain.gain.value = volume;
     src.connect(filter).connect(gain).connect(ac.destination);
-    src.start();
+    src.start(ac.currentTime + delay);
 }
 
 const SOUNDS = {
@@ -122,6 +137,10 @@ const SOUNDS = {
     floor: () => tone(95, 0.1, 'sine', 0.35),
     tick: () => tone(1200, 0.05, 'square', 0.04),
     buzzer: () => tone(220, 0.7, 'sawtooth', 0.08),
+    cheer: () => {
+        noise(1.1, 900, 0.3);
+        for (let i = 0; i < 4; i++) noise(0.05, 2200, 0.35, 0.1 + i * 0.16);
+    },
     start: () => [523, 659, 784].forEach((f, i) => tone(f, 0.12, 'square', 0.05, i * 0.1)),
 };
 
@@ -160,6 +179,7 @@ function startGame() {
         readyIn: 0,
         aim: null,
         popups: [],
+        cheer: 0,
     });
     overlay.hidden = true;
     play('start');
@@ -210,12 +230,21 @@ function handleEvent(event) {
         state.score += points;
         state.netWobble = 1;
         addPopup(`+${points}`, points === 3 ? '#ff3ea5' : '#ffd23f');
-        if (!state.ball.touchedRim) addPopup('スウィッシュ！', '#29e7ff');
+        const swish = !state.ball.touchedRim;
+        if (swish) addPopup('スウィッシュ！', '#29e7ff');
+        startCheer(points === 3 || swish);
         play('swish');
+        play('cheer');
         renderHud();
     } else {
         play(event);
     }
+}
+
+function startCheer(big) {
+    state.cheer = 1;
+    state.cheerFan = Math.floor(Math.random() * FANS.length);
+    state.cheerText = big ? 'ナイスシュート！' : CHEER_WORDS[Math.floor(Math.random() * CHEER_WORDS.length)];
 }
 
 function updateBall(dt) {
@@ -243,6 +272,7 @@ function update(dt) {
     if (state.flying) updateBall(dt);
     state.readyIn = Math.max(0, state.readyIn - dt);
     state.netWobble = Math.max(0, state.netWobble - dt * 1.5);
+    state.cheer = Math.max(0, state.cheer - dt / CHEER_SEC);
     for (const p of state.popups) p.age += dt;
     state.popups = state.popups.filter((p) => p.age < 1.2);
 }
@@ -266,8 +296,11 @@ function drawBackground() {
     ctx.fillStyle = wall;
     ctx.fillRect(0, 0, view.w, view.floorY);
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-    ctx.fillRect(0, sy(1.2), view.w, 0.5 * view.s);
+    drawFans();
+    ctx.fillStyle = '#3b2f85';
+    ctx.fillRect(0, sy(FENCE.top), view.w, (FENCE.top - FENCE.bottom) * view.s);
+    ctx.fillStyle = '#5a4bc0';
+    ctx.fillRect(0, sy(FENCE.top), view.w, 0.04 * view.s);
 
     const floor = ctx.createLinearGradient(0, view.floorY, 0, view.h);
     floor.addColorStop(0, '#d99a55');
@@ -295,6 +328,55 @@ function drawBackground() {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.fillText('3P', sx(threeX - 0.25), view.floorY + 0.2 * view.s);
+}
+
+function drawFans() {
+    const excitement = Math.min(1, state.cheer * 2);
+    FANS.forEach((fan, i) => {
+        const idle = Math.sin(state.clock * 2 + i) * 0.01;
+        const hop = Math.abs(Math.sin(state.clock * 11 + i * 1.3)) * 0.2 * excitement;
+        const base = FENCE.bottom + 0.15 + idle + hop;
+        const shoulder = base + 0.38;
+        const head = { x: fan.x, y: base + 0.52 };
+        if (excitement > 0) {
+            const wave = Math.sin(state.clock * 14 + i) * 0.06;
+            line(fan.x - 0.08, shoulder, fan.x - 0.2 + wave, shoulder + 0.3, 0.06, '#e8b88a');
+            line(fan.x + 0.08, shoulder, fan.x + 0.2 - wave, shoulder + 0.3, 0.06, '#e8b88a');
+        }
+        line(fan.x, base, fan.x, shoulder, 0.22, fan.shirt);
+        ctx.fillStyle = '#e8b88a';
+        ctx.beginPath();
+        ctx.arc(sx(head.x), sy(head.y), 0.1 * view.s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = fan.hair;
+        ctx.beginPath();
+        ctx.arc(sx(head.x), sy(head.y + 0.03), 0.1 * view.s, Math.PI, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3a1a05';
+        ctx.beginPath();
+        const mouth = excitement > 0 ? 0.035 : 0.012;
+        ctx.arc(sx(head.x), sy(head.y - 0.04), mouth * view.s, 0, Math.PI * 2);
+        ctx.fill();
+        if (i === state.cheerFan && state.cheer > 0) drawBubble(state.cheerText, head.x, head.y + 0.35);
+    });
+}
+
+function drawBubble(text, x, y) {
+    ctx.font = `bold ${0.2 * view.s}px system-ui, sans-serif`;
+    const w = ctx.measureText(text).width + 0.24 * view.s;
+    const h = 0.34 * view.s;
+    const left = Math.max(4, Math.min(view.w - w - 4, sx(x) - w / 2));
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.roundRect(left, sy(y) - h / 2, w, h, h / 2);
+    ctx.moveTo(sx(x) - 0.06 * view.s, sy(y) + h / 2 - 1);
+    ctx.lineTo(sx(x), sy(y - 0.12) + h / 2);
+    ctx.lineTo(sx(x) + 0.06 * view.s, sy(y) + h / 2 - 1);
+    ctx.fill();
+    ctx.fillStyle = '#14102e';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, left + w / 2, sy(y));
 }
 
 function drawGoal() {
