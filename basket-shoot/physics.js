@@ -99,3 +99,20 @@ export function step(ball, hoop, dt) {
     }
     return events;
 }
+
+export function predictShot(x, y, vx, vy, hoop, { dt = 1 / 240, maxSec = 3, sampleSec = 0.04, afterScoreSec = 0.15 } = {}) {
+    const ball = createBall(x, y, vx, vy);
+    const points = [];
+    let scoredAt = null;
+    for (let t = 0, nextSample = 0; t < maxSec; t += dt) {
+        const events = step(ball, hoop, dt);
+        if (t >= nextSample) {
+            points.push({ x: ball.x, y: ball.y });
+            nextSample += sampleSec;
+        }
+        if (events.includes('score')) scoredAt = t;
+        if (events.includes('floor')) break;
+        if (scoredAt !== null && t - scoredAt >= afterScoreSec) break;
+    }
+    return { points, scored: ball.scored, landed: ball.bounces > 0 };
+}

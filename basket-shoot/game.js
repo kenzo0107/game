@@ -8,6 +8,7 @@ import {
     SHOT_DISTANCE,
     hoopCenterX,
     nextShotDistance,
+    predictShot,
     launchVelocity,
     shotPoints,
     step,
@@ -19,7 +20,7 @@ const VIEW = { left: -0.6, width: 10.6, height: 5.8, floorDepth: 0.6 };
 const HOOP = createHoop(9);
 const POLE_X = 9.75;
 const MIN_DRAG = 0.25;
-const AIM_PREVIEW_SEC = 0.35;
+const GUIDE_COLOR = { in: '#7cf06b', out: 'rgba(255, 255, 255, 0.55)' };
 const SHOT_TIMEOUT_SEC = 4;
 const NEXT_BALL_DELAY_SEC = 0.35;
 const CHEER_SEC = 1.6;
@@ -199,11 +200,6 @@ function shoulderPosition() {
 
 const offset = (p, d) => ({ x: p.x + d.dx, y: p.y + d.dy });
 
-function releasePoint() {
-    const shoulder = shoulderPosition();
-    return { x: shoulder.x + RELEASE.dx, y: shoulder.y + RELEASE.dy };
-}
-
 function predictedReleasePoint() {
     const { player } = state;
     const vy = player.y === 0 ? SHOT_HOP_SPEED : player.vy;
@@ -219,7 +215,7 @@ function heldBall() {
         const set = offset(shoulderPosition(), SET_POINT);
         const at = k < SET_PHASE
             ? lerp(shot.from, set, ease(k / SET_PHASE))
-            : lerp(set, releasePoint(), ease((k - SET_PHASE) / (1 - SET_PHASE)));
+            : lerp(set, shot.release, ease((k - SET_PHASE) / (1 - SET_PHASE)));
         return { ...at, rot: shot.from.rot };
     }
     const shoulder = shoulderPosition();
@@ -294,7 +290,7 @@ function addPopup(text, color) {
 }
 
 function startShot(drag, from) {
-    state.shot = { drag, from, at: state.clock };
+    state.shot = { drag, from, at: state.clock, release: predictedReleasePoint() };
     if (state.player.y === 0) state.player.vy = SHOT_HOP_SPEED;
 }
 
@@ -713,14 +709,31 @@ function drawAim() {
     if (Math.hypot(drag.x, drag.y) < MIN_DRAG) return;
     const { vx, vy } = launchVelocity(drag.x, drag.y);
     const hand = predictedReleasePoint();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    for (let t = 0.05; t <= AIM_PREVIEW_SEC; t += 0.05) {
-        const x = hand.x + vx * t;
-        const y = hand.y + vy * t - 4.9 * t * t;
+    const { points, scored } = predictShot(hand.x, hand.y, vx, vy, HOOP, { maxSec: SHOT_TIMEOUT_SEC });
+    ctx.fillStyle = scored ? GUIDE_COLOR.in : GUIDE_COLOR.out;
+    points.forEach((p, i) => {
         ctx.beginPath();
-        ctx.arc(sx(x), sy(y), 0.035 * view.s * (1 - t / (AIM_PREVIEW_SEC * 1.4)), 0, Math.PI * 2);
+        ctx.arc(sx(p.x), sy(p.y), 0.035 * view.s * Math.max(0.4, 1 - i / points.length), 0, Math.PI * 2);
         ctx.fill();
-    }
+    });
+    if (scored) drawGuideMark();
+}
+
+function drawGuideMark() {
+    const center = { x: hoopCenterX(HOOP), y: RIM_HEIGHT };
+    ctx.strokeStyle = GUIDE_COLOR.in;
+    ctx.lineWidth = 0.04 * view.s;
+    ctx.beginPath();
+    ctx.ellipse(sx(center.x), sy(center.y), 0.32 * view.s, 0.1 * view.s, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.font = `bold ${0.22 * view.s}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 0.06 * view.s;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText('はいる！', sx(center.x - 0.7), sy(center.y + 0.85));
+    ctx.fillStyle = GUIDE_COLOR.in;
+    ctx.fillText('はいる！', sx(center.x - 0.7), sy(center.y + 0.85));
 }
 
 function drawPopups() {

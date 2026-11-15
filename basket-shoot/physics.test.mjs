@@ -10,6 +10,7 @@ import {
     SHOT_DISTANCE,
     launchVelocity,
     nextShotDistance,
+    predictShot,
     shotPoints,
     step,
 } from './physics.js';
@@ -97,4 +98,21 @@ test('近くから決め続けると 3P ラインの外まで届く', () => {
     let distance = SHOT_DISTANCE.min;
     for (let i = 0; i < 10; i++) distance = nextShotDistance(distance, true);
     assert.ok(distance >= THREE_POINT_DISTANCE);
+});
+
+test('入る軌道の予測は scored になり、実際に投げても入る', () => {
+    const scoring = [...Array(60).keys()].map((i) => ({ dx: 1.2 + i * 0.01, dy: 2.4 }))
+        .map(({ dx, dy }) => ({ dx, dy, ...launchVelocity(dx, dy) }))
+        .find(({ vx, vy }) => predictShot(5, 2.4, vx, vy, hoop).scored);
+    assert.ok(scoring, '入る引き方が見つかること');
+    const ball = createBall(5, 2.4, scoring.vx, scoring.vy);
+    simulate(ball);
+    assert.ok(ball.scored);
+});
+
+test('ゴールに届かない軌道の予測は scored にならず、床で止まる', () => {
+    const { vx, vy } = launchVelocity(0.3, 0.8);
+    const { scored, landed } = predictShot(5, 2.4, vx, vy, hoop);
+    assert.equal(scored, false);
+    assert.ok(landed);
 });
