@@ -30,7 +30,8 @@ const MAX_JUMPS = 2;
 const SPIN = { sec: 0.4, radius: 0.4 };
 const HELD_SPIN_SPEED = 18;
 const MAX_DIP = 0.15;
-const RISE_SEC = 0.18;
+const RISE_SEC = 0.24;
+const SET_PHASE = 0.5;
 const SHOULDER = { dx: 0.04, y: 1.45 };
 const SET_POINT = { dx: 0.17, dy: 0.55 };
 const POCKET = { dx: 0.24, dy: -0.32 };
@@ -40,6 +41,7 @@ const LEG = { upper: 0.46, lower: 0.46 };
 const HIP_Y = 0.92;
 const AIR_POSE_HEIGHT = 0.12;
 const SKIN_FAR = '#d9a77a';
+const HAIR = '#2b1a0e';
 const BACKSPIN = 14;
 const SKIN = '#f5c99b';
 const UNIFORM = { main: '#fb4f14', trim: '#002244', number: '#fff' };
@@ -213,7 +215,12 @@ function heldBall() {
     const { shot } = state;
     if (shot) {
         const k = Math.min(1, (state.clock - shot.at) / RISE_SEC);
-        return { ...lerp(shot.from, releasePoint(), 1 - (1 - k) ** 2), rot: shot.from.rot };
+        const ease = (t) => 1 - (1 - t) ** 2;
+        const set = offset(shoulderPosition(), SET_POINT);
+        const at = k < SET_PHASE
+            ? lerp(shot.from, set, ease(k / SET_PHASE))
+            : lerp(set, releasePoint(), ease((k - SET_PHASE) / (1 - SET_PHASE)));
+        return { ...at, rot: shot.from.rot };
     }
     const shoulder = shoulderPosition();
     const hand = offset(shoulder, SET_POINT);
@@ -540,17 +547,49 @@ function solveLimb(root, target, { upper, lower }, bend) {
     };
 }
 
-function drawLimb(root, target, size, bend, width, color) {
-    const { joint, end } = solveLimb(root, target, size, bend);
-    line(root.x, root.y, joint.x, joint.y, width, color);
-    line(joint.x, joint.y, end.x, end.y, width * 0.9, color);
+function fillPolygon(points, color) {
     ctx.fillStyle = color;
-    for (const p of [joint, end]) {
-        ctx.beginPath();
-        ctx.arc(sx(p.x), sy(p.y), width * 0.45 * view.s, 0, Math.PI * 2);
-        ctx.fill();
-    }
+    ctx.beginPath();
+    points.forEach((p, i) => (i ? ctx.lineTo(sx(p.x), sy(p.y)) : ctx.moveTo(sx(p.x), sy(p.y))));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function dot(p, radius, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(sx(p.x), sy(p.y), radius * view.s, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function taper(a, b, widthA, widthB, color) {
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    fillPolygon(
+        [
+            { x: a.x + (nx * widthA) / 2, y: a.y + (ny * widthA) / 2 },
+            { x: b.x + (nx * widthB) / 2, y: b.y + (ny * widthB) / 2 },
+            { x: b.x - (nx * widthB) / 2, y: b.y - (ny * widthB) / 2 },
+            { x: a.x - (nx * widthA) / 2, y: a.y - (ny * widthA) / 2 },
+        ],
+        color,
+    );
+    dot(a, widthA / 2, color);
+    dot(b, widthB / 2, color);
+}
+
+function drawLimb(root, target, size, bend, [rootWidth, jointWidth, endWidth], color) {
+    const { joint, end } = solveLimb(root, target, size, bend);
+    taper(root, joint, rootWidth, jointWidth, color);
+    taper(joint, end, jointWidth, endWidth, color);
     return { joint, end };
+}
+
+function drawArm(shoulder, target, color, snap) {
+    const { end: hand } = drawLimb(shoulder, target, ARM, -1, [0.11, 0.085, 0.07], color);
+    dot(hand, 0.05, color);
+    if (snap) taper(hand, { x: hand.x + 0.08, y: hand.y - 0.06 }, 0.07, 0.04, color);
 }
 
 function armTargets(shoulder) {
@@ -567,17 +606,67 @@ function armTargets(shoulder) {
     };
 }
 
-function drawLeg(hip, side, color) {
+function drawLeg(hip, side, color, shoe) {
     const k = Math.min(1, state.player.y / AIR_POSE_HEIGHT);
-    const ground = { x: state.shooterX + side * 0.07 + 0.02, y: 0.04 };
+    const ground = { x: state.shooterX + side * 0.07 + 0.02, y: 0.06 };
     const air = { x: hip.x + side * 0.03 - 0.03, y: hip.y - 0.88 };
     const foot = { x: ground.x + (air.x - ground.x) * k, y: Math.max(ground.y, ground.y + (air.y - ground.y) * k) };
-    const { joint: knee, end } = drawLimb(hip, foot, LEG, 1, 0.13, color);
-    const toe = { x: end.x + 0.14 - 0.06 * k, y: end.y - 0.01 - 0.07 * k };
-    line(end.x - 0.03, end.y, toe.x, toe.y, 0.08, '#fff');
-    const hem = { x: hip.x + (knee.x - hip.x) * 0.6, y: hip.y + (knee.y - hip.y) * 0.6 };
-    line(hip.x, hip.y + 0.04, hem.x, hem.y, 0.21, UNIFORM.trim);
-    line(hem.x, hem.y, hem.x + (knee.x - hem.x) * 0.12, hem.y + (knee.y - hem.y) * 0.12, 0.21, UNIFORM.main);
+    const { joint: knee, end } = drawLimb(hip, foot, LEG, 1, [0.17, 0.12, 0.09], color);
+    const toe = { x: end.x + 0.15 - 0.06 * k, y: end.y - 0.02 - 0.08 * k };
+    taper(end, toe, 0.11, 0.08, shoe);
+    taper({ x: end.x - 0.01, y: end.y - 0.04 }, { x: toe.x, y: toe.y - 0.03 }, 0.03, 0.03, '#c9c9d6');
+    const hem = lerp(hip, knee, 0.62);
+    taper(hip, hem, 0.24, 0.21, UNIFORM.trim);
+    const stripeStart = lerp(hip, knee, 0.55);
+    const len = Math.hypot(knee.x - hip.x, knee.y - hip.y);
+    const n = { x: (-(knee.y - hip.y) / len) * 0.12, y: ((knee.x - hip.x) / len) * 0.12 };
+    fillPolygon(
+        [offset(stripeStart, { dx: n.x, dy: n.y }), offset(hem, { dx: n.x, dy: n.y }), offset(hem, { dx: -n.x, dy: -n.y }), offset(stripeStart, { dx: -n.x, dy: -n.y })],
+        UNIFORM.main,
+    );
+}
+
+function drawTorso(hip, shoulder) {
+    const len = Math.hypot(shoulder.x - hip.x, shoulder.y - hip.y);
+    const n = { x: -(shoulder.y - hip.y) / len, y: (shoulder.x - hip.x) / len };
+    const side = (p, w) => [
+        { x: p.x + n.x * w, y: p.y + n.y * w },
+        { x: p.x - n.x * w, y: p.y - n.y * w },
+    ];
+    const torso = (grow) => {
+        const [hipBack, hipFront] = side(hip, 0.13 + grow);
+        const [topBack, topFront] = side(offset(shoulder, { dx: 0, dy: 0.04 + grow }), 0.15 + grow);
+        return [hipFront, hipBack, topBack, topFront];
+    };
+    fillPolygon(torso(0.025), UNIFORM.trim);
+    fillPolygon(torso(0), UNIFORM.main);
+    const neckLine = offset(shoulder, { dx: 0.04, dy: 0.05 });
+    dot(neckLine, 0.07, UNIFORM.trim);
+    taper(offset(hip, { dx: -0.15, dy: 0 }), offset(hip, { dx: 0.15, dy: 0 }), 0.07, 0.07, UNIFORM.trim);
+    ctx.font = `bold ${0.2 * view.s}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const at = lerp(hip, shoulder, 0.6);
+    ctx.lineWidth = 0.045 * view.s;
+    ctx.strokeStyle = UNIFORM.trim;
+    ctx.strokeText('7', sx(at.x), sy(at.y));
+    ctx.fillStyle = UNIFORM.number;
+    ctx.fillText('7', sx(at.x), sy(at.y));
+}
+
+function drawHead(shoulder) {
+    const head = offset(shoulder, { dx: 0.04, dy: 0.29 });
+    taper(offset(shoulder, { dx: 0.02, dy: 0.02 }), offset(head, { dx: -0.01, dy: -0.08 }), 0.1, 0.09, SKIN);
+    dot(head, 0.14, SKIN);
+    dot(offset(head, { dx: 0.135, dy: -0.02 }), 0.03, SKIN);
+    ctx.fillStyle = HAIR;
+    ctx.beginPath();
+    ctx.arc(sx(head.x - 0.01), sy(head.y + 0.02), 0.15 * view.s, Math.PI * 0.9, Math.PI * 1.95);
+    ctx.fill();
+    dot(offset(head, { dx: -0.09, dy: -0.02 }), 0.07, HAIR);
+    dot(offset(head, { dx: -0.01, dy: -0.01 }), 0.035, SKIN_FAR);
+    dot(offset(head, { dx: 0.08, dy: 0.01 }), 0.018, HAIR);
+    taper(offset(head, { dx: 0.05, dy: 0.05 }), offset(head, { dx: 0.11, dy: 0.055 }), 0.018, 0.014, HAIR);
 }
 
 function drawPlayer() {
@@ -586,39 +675,12 @@ function drawPlayer() {
     const hip = { x: state.shooterX - dip * 0.5, y: HIP_Y + state.player.y - dip };
     const arms = armTargets(shoulder);
 
-    drawLeg(hip, -1, SKIN_FAR);
-    drawLimb(shoulder, arms.guide, ARM, -1, 0.085, SKIN_FAR);
-    drawLeg(hip, 1, SKIN);
-
-    line(hip.x, hip.y - 0.04, shoulder.x, shoulder.y, 0.34, UNIFORM.trim);
-    line(hip.x, hip.y, shoulder.x, shoulder.y - 0.04, 0.27, UNIFORM.main);
-    line(hip.x - 0.17, hip.y + 0.01, hip.x + 0.17, hip.y + 0.01, 0.06, UNIFORM.trim);
-    ctx.font = `bold ${0.18 * view.s}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const numberAt = { x: sx((hip.x + shoulder.x * 2) / 3), y: sy((hip.y + shoulder.y * 2) / 3) };
-    ctx.lineWidth = 0.04 * view.s;
-    ctx.strokeStyle = UNIFORM.trim;
-    ctx.strokeText('7', numberAt.x, numberAt.y);
-    ctx.fillStyle = UNIFORM.number;
-    ctx.fillText('7', numberAt.x, numberAt.y);
-
-    const head = offset(shoulder, { dx: 0.03, dy: 0.27 });
-    line(shoulder.x, shoulder.y, head.x, head.y, 0.1, SKIN);
-    ctx.fillStyle = SKIN;
-    ctx.beginPath();
-    ctx.arc(sx(head.x), sy(head.y), 0.14 * view.s, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#2b1a0e';
-    ctx.beginPath();
-    ctx.arc(sx(head.x - 0.02), sy(head.y + 0.03), 0.14 * view.s, Math.PI * 0.95, Math.PI * 1.9);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(sx(head.x + 0.07), sy(head.y), 0.018 * view.s, 0, Math.PI * 2);
-    ctx.fill();
-
-    const { end: hand } = drawLimb(shoulder, arms.shooting, ARM, -1, 0.095, SKIN);
-    if (arms.snap) line(hand.x, hand.y, hand.x + 0.08, hand.y - 0.06, 0.07, SKIN);
+    drawLeg(hip, -1, SKIN_FAR, '#d6d6e2');
+    drawArm(shoulder, arms.guide, SKIN_FAR, false);
+    drawLeg(hip, 1, SKIN, '#fff');
+    drawTorso(hip, shoulder);
+    drawHead(shoulder);
+    drawArm(shoulder, arms.shooting, SKIN, arms.snap);
 }
 
 function drawBall(x, y, rot) {
