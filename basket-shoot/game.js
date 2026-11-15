@@ -31,6 +31,10 @@ const MAX_JUMPS = 2;
 const SPIN = { sec: 0.4, radius: 0.4 };
 const HELD_SPIN_SPEED = 18;
 const MAX_DIP = 0.15;
+const RISE_SEC = 0.18;
+const SHOULDER = { dx: 0.04, y: 1.45 };
+const POCKET = { dx: 0.2, dy: -0.1 };
+const RELEASE = { dx: 0.22, dy: 0.7 };
 const BACKSPIN = 14;
 const SKIN = '#f5c99b';
 const UNIFORM = { main: '#fb4f14', trim: '#002244', number: '#fff' };
@@ -70,6 +74,7 @@ const state = {
     shotAge: 0,
     player: { y: 0, vy: 0, jumps: 0 },
     spinAt: -Infinity,
+    shot: null,
     readyIn: 0,
     aim: null,
     popups: [],
@@ -179,10 +184,39 @@ function play(name) {
 const handPosition = () => ({ x: state.shooterX + HAND.dx, y: HAND.y + state.player.y });
 const spinProgress = () => (state.clock - state.spinAt) / SPIN.sec;
 
+const lerp = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
+
+function shoulderPosition() {
+    const dip = crouchDepth();
+    return { x: state.shooterX + SHOULDER.dx + dip * 0.3, y: SHOULDER.y + state.player.y - dip };
+}
+
+function releasePoint() {
+    const shoulder = shoulderPosition();
+    return { x: shoulder.x + RELEASE.dx, y: shoulder.y + RELEASE.dy };
+}
+
+function predictedReleasePoint() {
+    const { player } = state;
+    const vy = player.y === 0 ? SHOT_HOP_SPEED : player.vy;
+    const y = Math.max(0, player.y + vy * RISE_SEC - (PLAYER_GRAVITY * RISE_SEC ** 2) / 2);
+    return { x: state.shooterX + SHOULDER.dx + RELEASE.dx, y: SHOULDER.y + y + RELEASE.dy };
+}
+
 function heldBall() {
+    const { shot } = state;
+    if (shot) {
+        const k = Math.min(1, (state.clock - shot.at) / RISE_SEC);
+        return { ...lerp(shot.from, releasePoint(), 1 - (1 - k) ** 2), rot: shot.from.rot };
+    }
     const hand = handPosition();
     const k = spinProgress();
-    if (k < 0 || k >= 1) return { ...hand, rot: state.player.y > 0 ? state.clock * HELD_SPIN_SPEED : 0 };
+    if (k < 0 || k >= 1) {
+        const shoulder = shoulderPosition();
+        const pocket = { x: shoulder.x + POCKET.dx, y: shoulder.y + POCKET.dy };
+        const rot = state.player.y > 0 ? state.clock * HELD_SPIN_SPEED : 0;
+        return { ...lerp(hand, pocket, crouchDepth() / MAX_DIP), rot };
+    }
     const angle = k * Math.PI * 2;
     return {
         x: hand.x + Math.sin(angle) * SPIN.radius,
@@ -190,7 +224,8 @@ function heldBall() {
         rot: angle * 2,
     };
 }
-const canThrow = () => state.phase === 'playing' && !state.flying && state.readyIn <= 0 && state.timeLeft > 0;
+const canThrow = () =>
+    state.phase === 'playing' && !state.flying && !state.shot && state.readyIn <= 0 && state.timeLeft > 0;
 
 const shooterXAt = (distance) => hoopCenterX(HOOP) - distance;
 
@@ -216,6 +251,7 @@ function startGame() {
         cheer: 0,
         player: { y: 0, vy: 0, jumps: 0 },
         spinAt: -Infinity,
+        shot: null,
     });
     overlay.hidden = true;
     play('start');
@@ -244,14 +280,19 @@ function addPopup(text, color) {
     state.popups.push({ text, color, x: hoopCenterX(HOOP), y: RIM_HEIGHT + 0.5 + state.popups.length * 0.45, age: 0 });
 }
 
-function throwBall(dragX, dragY) {
-    const { vx, vy } = launchVelocity(dragX, dragY);
+function startShot(drag, from) {
+    state.shot = { drag, from, at: state.clock };
+    if (state.player.y === 0) state.player.vy = SHOT_HOP_SPEED;
+}
+
+function releaseShot() {
     const held = heldBall();
+    const { vx, vy } = launchVelocity(state.shot.drag.x, state.shot.drag.y);
+    state.shot = null;
     state.ball = { ...createBall(held.x, held.y, vx, vy), rot: held.rot };
     state.flying = true;
     state.shotAge = 0;
     state.shotFromX = state.shooterX;
-    if (state.player.y === 0) state.player.vy = SHOT_HOP_SPEED;
 }
 
 function jump() {
@@ -324,9 +365,10 @@ function update(dt) {
             if (now <= 5 && now > 0) play('tick');
             renderHud();
         }
-        if (state.timeLeft <= 0 && !state.flying) endGame();
     }
     updatePlayer(dt);
+    if (state.shot && state.clock - state.shot.at >= RISE_SEC) releaseShot();
+    if (state.phase === 'playing' && state.timeLeft <= 0 && !state.flying && !state.shot) endGame();
     if (state.flying) updateBall(dt);
     state.readyIn = Math.max(0, state.readyIn - dt);
     state.netWobble = Math.max(0, state.netWobble - dt * 1.5);
@@ -487,7 +529,7 @@ function drawPlayer() {
     const dip = crouchDepth();
     const lift = air - dip;
     const hip = { x, y: 0.9 + lift };
-    const shoulder = { x: x + 0.04 + dip * 0.3, y: 1.45 + lift };
+    const shoulder = shoulderPosition();
     for (const side of [-1, 1]) {
         const foot = { x: x + side * 0.1 + air * 0.15, y: air };
         const knee = { x: (hip.x + foot.x) / 2 + 0.04 + dip * 1.4 + air * 0.2, y: (hip.y + foot.y) / 2 };
@@ -570,7 +612,7 @@ function drawAim() {
     const drag = dragInWorld(aim);
     if (Math.hypot(drag.x, drag.y) < MIN_DRAG) return;
     const { vx, vy } = launchVelocity(drag.x, drag.y);
-    const hand = heldBall();
+    const hand = predictedReleasePoint();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     for (let t = 0.05; t <= AIM_PREVIEW_SEC; t += 0.05) {
         const x = hand.x + vx * t;
@@ -644,12 +686,13 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerup', (e) => {
     const { aim } = state;
     if (aim?.id !== e.pointerId) return;
-    state.aim = null;
     aim.x = e.clientX;
     aim.y = e.clientY;
+    const crouchedBall = heldBall();
+    state.aim = null;
     const drag = dragInWorld(aim);
     if (!canThrow()) return;
-    if (Math.hypot(drag.x, drag.y) >= MIN_DRAG) throwBall(drag.x, drag.y);
+    if (Math.hypot(drag.x, drag.y) >= MIN_DRAG) startShot(drag, crouchedBall);
     else jump();
 });
 
