@@ -1,3 +1,4 @@
+import { createBgm } from './bgm.js';
 import { cpuMove, judge, other } from './logic.js';
 
 const MARK_SVG = {
@@ -44,10 +45,15 @@ let scores = { o: 0, x: 0, draw: 0 };
 const isCpu = (mark) => mode !== 'pvp' && mark === 'x';
 
 let audio = null;
+function audioContext() {
+    audio ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    return audio;
+}
+
 function beep(notes, type = 'square') {
     try {
-        audio ??= new (window.AudioContext || window.webkitAudioContext)();
-        if (audio.state === 'suspended') audio.resume();
+        audioContext();
         const t = audio.currentTime;
         for (const [freq, start, length] of notes) {
             const osc = audio.createOscillator();
@@ -69,6 +75,24 @@ const sfx = {
     lose: () => beep([[392, 0, 0.15], [330, 0.15, 0.15], [262, 0.3, 0.35]], 'triangle'),
     draw: () => beep([[523, 0, 0.12], [523, 0.15, 0.2]], 'triangle'),
 };
+
+let bgm = null;
+let bgmOn = true;
+try {
+    bgmOn = localStorage.getItem('marubatsuBgm') !== 'off';
+} catch {}
+const bgmButton = document.getElementById('bgm');
+
+function syncBgm() {
+    if (!audio) return;
+    bgm ??= createBgm(audio);
+    if (bgmOn && !over && !document.hidden) bgm.start();
+    else bgm.stop();
+}
+
+function renderBgm() {
+    bgmButton.setAttribute('aria-pressed', String(bgmOn));
+}
 
 function renderScores() {
     for (const key of Object.keys(scoreEls)) scoreEls[key].textContent = scores[key];
@@ -106,6 +130,7 @@ function showWinLine([a, , c]) {
 
 function finish({ winner, line }) {
     over = true;
+    syncBgm();
     scores[winner] += 1;
     renderScores();
     message.className = 'message win';
@@ -170,6 +195,7 @@ function newRound() {
         cell.innerHTML = '';
     }
     renderTurn();
+    syncBgm();
     scheduleCpu();
 }
 
@@ -193,6 +219,23 @@ for (const button of modeButtons) {
 }
 document.getElementById('restart').addEventListener('click', newRound);
 document.getElementById('reset').addEventListener('click', resetScores);
+bgmButton.addEventListener('click', () => {
+    bgmOn = !bgmOn;
+    try {
+        localStorage.setItem('marubatsuBgm', bgmOn ? 'on' : 'off');
+    } catch {}
+    renderBgm();
+    syncBgm();
+});
+// ブラウザは操作前の音声再生を許さないため、最初のタップで AudioContext を作る。ボタン側の処理の後に動くようバブリングで受ける
+document.addEventListener('click', () => {
+    try {
+        audioContext();
+    } catch {}
+    syncBgm();
+});
+document.addEventListener('visibilitychange', syncBgm);
 
 renderMode();
+renderBgm();
 resetScores();
