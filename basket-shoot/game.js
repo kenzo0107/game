@@ -18,7 +18,6 @@ const DT = 1 / 240;
 const VIEW = { left: -0.6, width: 10.6, height: 5.8, floorDepth: 0.6 };
 const HOOP = createHoop(9);
 const POLE_X = 9.75;
-const HAND = { dx: 0.15, y: 2.1 };
 const MIN_DRAG = 0.25;
 const AIM_PREVIEW_SEC = 0.35;
 const SHOT_TIMEOUT_SEC = 4;
@@ -33,8 +32,14 @@ const HELD_SPIN_SPEED = 18;
 const MAX_DIP = 0.15;
 const RISE_SEC = 0.18;
 const SHOULDER = { dx: 0.04, y: 1.45 };
-const POCKET = { dx: 0.2, dy: -0.1 };
-const RELEASE = { dx: 0.22, dy: 0.7 };
+const SET_POINT = { dx: 0.17, dy: 0.55 };
+const POCKET = { dx: 0.24, dy: -0.32 };
+const RELEASE = { dx: 0.2, dy: 0.66 };
+const ARM = { upper: 0.3, lower: 0.3 };
+const LEG = { upper: 0.46, lower: 0.46 };
+const HIP_Y = 0.92;
+const AIR_POSE_HEIGHT = 0.12;
+const SKIN_FAR = '#d9a77a';
 const BACKSPIN = 14;
 const SKIN = '#f5c99b';
 const UNIFORM = { main: '#fb4f14', trim: '#002244', number: '#fff' };
@@ -181,15 +186,16 @@ function play(name) {
     } catch {}
 }
 
-const handPosition = () => ({ x: state.shooterX + HAND.dx, y: HAND.y + state.player.y });
 const spinProgress = () => (state.clock - state.spinAt) / SPIN.sec;
 
 const lerp = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
 
 function shoulderPosition() {
     const dip = crouchDepth();
-    return { x: state.shooterX + SHOULDER.dx + dip * 0.3, y: SHOULDER.y + state.player.y - dip };
+    return { x: state.shooterX + SHOULDER.dx + dip * 0.6, y: SHOULDER.y + state.player.y - dip };
 }
+
+const offset = (p, d) => ({ x: p.x + d.dx, y: p.y + d.dy });
 
 function releasePoint() {
     const shoulder = shoulderPosition();
@@ -209,11 +215,11 @@ function heldBall() {
         const k = Math.min(1, (state.clock - shot.at) / RISE_SEC);
         return { ...lerp(shot.from, releasePoint(), 1 - (1 - k) ** 2), rot: shot.from.rot };
     }
-    const hand = handPosition();
+    const shoulder = shoulderPosition();
+    const hand = offset(shoulder, SET_POINT);
     const k = spinProgress();
     if (k < 0 || k >= 1) {
-        const shoulder = shoulderPosition();
-        const pocket = { x: shoulder.x + POCKET.dx, y: shoulder.y + POCKET.dy };
+        const pocket = offset(shoulder, POCKET);
         const rot = state.player.y > 0 ? state.clock * HELD_SPIN_SPEED : 0;
         return { ...lerp(hand, pocket, crouchDepth() / MAX_DIP), rot };
     }
@@ -518,69 +524,101 @@ function crouchDepth() {
     return Math.min(Math.hypot(drag.x, drag.y) / 1.5, 1) * MAX_DIP;
 }
 
-function limb(from, mid, to, width, color) {
-    line(from.x, from.y, mid.x, mid.y, width, color);
-    line(mid.x, mid.y, to.x, to.y, width, color);
+// 腕や脚の関節位置を手足の先から逆算する（2 リンクの逆運動学）。bend で肘・膝が曲がる側を選ぶ
+function solveLimb(root, target, { upper, lower }, bend) {
+    const dx = target.x - root.x;
+    const dy = target.y - root.y;
+    const reach = Math.min(Math.max(Math.hypot(dx, dy), Math.abs(upper - lower) + 1e-3), upper + lower - 1e-3);
+    const angle = Math.atan2(dy, dx);
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+    const along = (upper ** 2 - lower ** 2 + reach ** 2) / (2 * reach);
+    const side = Math.sqrt(Math.max(0, upper ** 2 - along ** 2)) * bend;
+    return {
+        joint: { x: root.x + ux * along - uy * side, y: root.y + uy * along + ux * side },
+        end: { x: root.x + ux * reach, y: root.y + uy * reach },
+    };
+}
+
+function drawLimb(root, target, size, bend, width, color) {
+    const { joint, end } = solveLimb(root, target, size, bend);
+    line(root.x, root.y, joint.x, joint.y, width, color);
+    line(joint.x, joint.y, end.x, end.y, width * 0.9, color);
+    ctx.fillStyle = color;
+    for (const p of [joint, end]) {
+        ctx.beginPath();
+        ctx.arc(sx(p.x), sy(p.y), width * 0.45 * view.s, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    return { joint, end };
+}
+
+function armTargets(shoulder) {
+    if (state.flying) {
+        return { shooting: offset(shoulder, { dx: 0.18, dy: 0.56 }), guide: offset(shoulder, { dx: 0.1, dy: 0.5 }), snap: true };
+    }
+    if (state.readyIn > 0) {
+        return { shooting: offset(shoulder, { dx: 0.08, dy: -0.55 }), guide: offset(shoulder, { dx: -0.02, dy: -0.55 }) };
+    }
+    const ball = heldBall();
+    return {
+        shooting: { x: ball.x - 0.03, y: ball.y - BALL_RADIUS * 0.9 },
+        guide: { x: ball.x - BALL_RADIUS * 0.8, y: ball.y + 0.02 },
+    };
+}
+
+function drawLeg(hip, side, color) {
+    const k = Math.min(1, state.player.y / AIR_POSE_HEIGHT);
+    const ground = { x: state.shooterX + side * 0.07 + 0.02, y: 0.04 };
+    const air = { x: hip.x + side * 0.03 - 0.03, y: hip.y - 0.88 };
+    const foot = { x: ground.x + (air.x - ground.x) * k, y: Math.max(ground.y, ground.y + (air.y - ground.y) * k) };
+    const { joint: knee, end } = drawLimb(hip, foot, LEG, 1, 0.13, color);
+    const toe = { x: end.x + 0.14 - 0.06 * k, y: end.y - 0.01 - 0.07 * k };
+    line(end.x - 0.03, end.y, toe.x, toe.y, 0.08, '#fff');
+    const hem = { x: hip.x + (knee.x - hip.x) * 0.6, y: hip.y + (knee.y - hip.y) * 0.6 };
+    line(hip.x, hip.y + 0.04, hem.x, hem.y, 0.21, UNIFORM.trim);
+    line(hem.x, hem.y, hem.x + (knee.x - hem.x) * 0.12, hem.y + (knee.y - hem.y) * 0.12, 0.21, UNIFORM.main);
 }
 
 function drawPlayer() {
-    const x = state.shooterX;
-    const air = state.player.y;
     const dip = crouchDepth();
-    const lift = air - dip;
-    const hip = { x, y: 0.9 + lift };
     const shoulder = shoulderPosition();
-    for (const side of [-1, 1]) {
-        const foot = { x: x + side * 0.1 + air * 0.15, y: air };
-        const knee = { x: (hip.x + foot.x) / 2 + 0.04 + dip * 1.4 + air * 0.2, y: (hip.y + foot.y) / 2 };
-        const thigh = { x: hip.x + side * 0.06, y: hip.y };
-        limb(thigh, knee, foot, 0.12, SKIN);
-        line(foot.x - 0.02, foot.y, foot.x + 0.12, foot.y, 0.08, '#fff');
-        const hem = { x: thigh.x + (knee.x - thigh.x) * 0.75, y: thigh.y + (knee.y - thigh.y) * 0.75 };
-        line(thigh.x, thigh.y + 0.05, hem.x, hem.y, 0.19, UNIFORM.trim);
-        line(hem.x, hem.y, hem.x + (knee.x - hem.x) * 0.15, hem.y + (knee.y - hem.y) * 0.15, 0.19, UNIFORM.main);
-    }
-    line(hip.x, hip.y - 0.05, shoulder.x, shoulder.y, 0.34, UNIFORM.trim);
-    line(hip.x, hip.y + 0.02, shoulder.x, shoulder.y - 0.04, 0.27, UNIFORM.main);
-    line(hip.x - 0.17, hip.y + 0.02, hip.x + 0.17, hip.y + 0.02, 0.06, UNIFORM.trim);
+    const hip = { x: state.shooterX - dip * 0.5, y: HIP_Y + state.player.y - dip };
+    const arms = armTargets(shoulder);
+
+    drawLeg(hip, -1, SKIN_FAR);
+    drawLimb(shoulder, arms.guide, ARM, -1, 0.085, SKIN_FAR);
+    drawLeg(hip, 1, SKIN);
+
+    line(hip.x, hip.y - 0.04, shoulder.x, shoulder.y, 0.34, UNIFORM.trim);
+    line(hip.x, hip.y, shoulder.x, shoulder.y - 0.04, 0.27, UNIFORM.main);
+    line(hip.x - 0.17, hip.y + 0.01, hip.x + 0.17, hip.y + 0.01, 0.06, UNIFORM.trim);
     ctx.font = `bold ${0.18 * view.s}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const numberAt = { x: sx((hip.x + shoulder.x) / 2), y: sy(shoulder.y - 0.23) };
+    const numberAt = { x: sx((hip.x + shoulder.x * 2) / 3), y: sy((hip.y + shoulder.y * 2) / 3) };
     ctx.lineWidth = 0.04 * view.s;
     ctx.strokeStyle = UNIFORM.trim;
     ctx.strokeText('7', numberAt.x, numberAt.y);
     ctx.fillStyle = UNIFORM.number;
     ctx.fillText('7', numberAt.x, numberAt.y);
-    drawArms(shoulder);
-    const head = { x: shoulder.x + 0.02, y: shoulder.y + 0.25 };
+
+    const head = offset(shoulder, { dx: 0.03, dy: 0.27 });
+    line(shoulder.x, shoulder.y, head.x, head.y, 0.1, SKIN);
     ctx.fillStyle = SKIN;
     ctx.beginPath();
     ctx.arc(sx(head.x), sy(head.y), 0.14 * view.s, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#2b1a0e';
     ctx.beginPath();
-    ctx.arc(sx(head.x), sy(head.y + 0.04), 0.14 * view.s, Math.PI, Math.PI * 2);
+    ctx.arc(sx(head.x - 0.02), sy(head.y + 0.03), 0.14 * view.s, Math.PI * 0.95, Math.PI * 1.9);
     ctx.fill();
-}
+    ctx.beginPath();
+    ctx.arc(sx(head.x + 0.07), sy(head.y), 0.018 * view.s, 0, Math.PI * 2);
+    ctx.fill();
 
-function drawArms(shoulder) {
-    if (state.flying) {
-        const hand = { x: shoulder.x + 0.2, y: shoulder.y + 0.6 };
-        limb(shoulder, { x: shoulder.x + 0.1, y: shoulder.y + 0.3 }, hand, 0.09, SKIN);
-        line(hand.x, hand.y, hand.x + 0.08, hand.y - 0.07, 0.07, SKIN);
-        limb(shoulder, { x: shoulder.x + 0.02, y: shoulder.y + 0.28 }, { x: shoulder.x + 0.06, y: shoulder.y + 0.52 }, 0.08, SKIN);
-        return;
-    }
-    if (state.readyIn > 0) {
-        limb(shoulder, { x: shoulder.x + 0.06, y: shoulder.y - 0.3 }, { x: shoulder.x + 0.1, y: shoulder.y - 0.55 }, 0.09, SKIN);
-        return;
-    }
-    const ball = heldBall();
-    const under = { x: ball.x - 0.03, y: ball.y - BALL_RADIUS };
-    limb(shoulder, { x: shoulder.x + 0.16, y: (shoulder.y + under.y) / 2 - 0.05 }, under, 0.09, SKIN);
-    const side = { x: ball.x - BALL_RADIUS, y: ball.y + 0.02 };
-    limb(shoulder, { x: shoulder.x - 0.1, y: (shoulder.y + side.y) / 2 }, side, 0.08, SKIN);
+    const { end: hand } = drawLimb(shoulder, arms.shooting, ARM, -1, 0.095, SKIN);
+    if (arms.snap) line(hand.x, hand.y, hand.x + 0.08, hand.y - 0.06, 0.07, SKIN);
 }
 
 function drawBall(x, y, rot) {
