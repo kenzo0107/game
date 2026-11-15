@@ -227,15 +227,19 @@ bgmButton.addEventListener('click', () => {
     renderBgm();
     syncBgm();
 });
-// ブラウザは操作前の音声再生を許さないため、最初のタップで AudioContext を作る。ボタン側の処理の後に動くようバブリングで受ける
-document.addEventListener('click', () => {
-    try {
-        audioContext();
-    } catch {}
-    syncBgm();
-});
+// 操作前の再生を許さないブラウザでは AudioContext が停止状態で作られる。click だけを待つと盤面以外に触れても鳴らないため、最初の操作の種類を問わず再開する
+for (const type of ['pointerdown', 'touchend', 'keydown', 'click']) {
+    document.addEventListener(type, () => {
+        try {
+            audioContext();
+        } catch {}
+    });
+}
 document.addEventListener('visibilitychange', syncBgm);
 
 renderMode();
 renderBgm();
+try {
+    audioContext();
+} catch {}
 resetScores();
