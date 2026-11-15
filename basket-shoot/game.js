@@ -22,6 +22,10 @@ const AIM_PREVIEW_SEC = 0.35;
 const SHOT_TIMEOUT_SEC = 4;
 const NEXT_BALL_DELAY_SEC = 0.35;
 const CHEER_SEC = 1.6;
+const JUMP = { sec: 0.55, height: 0.3 };
+const MAX_DIP = 0.15;
+const BACKSPIN = 14;
+const SKIN = '#f5c99b';
 const FENCE = { bottom: 0.7, top: 1.15 };
 const FANS = [
     { x: 0.2, shirt: '#ff3ea5', hair: '#2b1a0e' },
@@ -55,6 +59,7 @@ const state = {
     ball: null,
     flying: false,
     shotAge: 0,
+    jumpAt: -Infinity,
     readyIn: 0,
     aim: null,
     popups: [],
@@ -213,6 +218,7 @@ function throwBall(dragX, dragY) {
     state.flying = true;
     state.shotAge = 0;
     state.shotFromX = state.shooterX;
+    state.jumpAt = state.clock;
 }
 
 function resolveShot() {
@@ -250,7 +256,7 @@ function startCheer(big) {
 function updateBall(dt) {
     const { ball } = state;
     for (let t = 0; t < dt; t += DT) step(ball, HOOP, DT).forEach(handleEvent);
-    ball.rot += (ball.vx * dt) / BALL_RADIUS;
+    ball.rot += ball.bounces === 0 && !ball.scored ? -BACKSPIN * dt : (ball.vx * dt) / BALL_RADIUS;
     state.shotAge += dt;
     const out = ball.x < VIEW.left - 0.5 || ball.x > VIEW.left + VIEW.width + 0.5;
     const settled = ball.bounces >= (ball.scored ? 1 : 2);
@@ -412,28 +418,70 @@ function drawNetAndRim() {
     line(front.x, RIM_HEIGHT, back.x, RIM_HEIGHT, 0.05, '#ff5a1f');
 }
 
+function jumpHeight() {
+    const k = (state.clock - state.jumpAt) / JUMP.sec;
+    return k >= 0 && k <= 1 ? JUMP.height * 4 * k * (1 - k) : 0;
+}
+
+function crouchDepth() {
+    if (!state.aim || !canThrow()) return 0;
+    const drag = dragInWorld(state.aim);
+    return Math.min(Math.hypot(drag.x, drag.y) / 1.5, 1) * MAX_DIP;
+}
+
+function limb(from, mid, to, width, color) {
+    line(from.x, from.y, mid.x, mid.y, width, color);
+    line(mid.x, mid.y, to.x, to.y, width, color);
+}
+
 function drawPlayer() {
     const x = state.shooterX;
-    const holding = !state.flying;
-    const hand = handPosition();
-    line(x - 0.14, 0, x - 0.02, 0.9, 0.12, '#f5c99b');
-    line(x + 0.14, 0, x + 0.02, 0.9, 0.12, '#f5c99b');
-    line(x, 0.85, x, 1.5, 0.32, '#2f6bff');
+    const air = jumpHeight();
+    const dip = crouchDepth();
+    const lift = air - dip;
+    const hip = { x, y: 0.9 + lift };
+    const shoulder = { x: x + 0.04 + dip * 0.3, y: 1.45 + lift };
+    for (const side of [-1, 1]) {
+        const foot = { x: x + side * 0.1 + air * 0.15, y: air };
+        const knee = { x: (hip.x + foot.x) / 2 + 0.04 + dip * 1.4 + air * 0.2, y: (hip.y + foot.y) / 2 };
+        limb({ x: hip.x + side * 0.06, y: hip.y }, knee, foot, 0.12, SKIN);
+        line(foot.x - 0.02, foot.y, foot.x + 0.12, foot.y, 0.08, '#fff');
+    }
+    line(hip.x, hip.y - 0.05, shoulder.x, shoulder.y, 0.32, '#2f6bff');
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${0.18 * view.s}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('7', sx(x), sy(1.22));
-    const armEnd = holding ? { x: hand.x - 0.02, y: hand.y - 0.1 } : { x: x + 0.35, y: 2.0 };
-    line(x + 0.05, 1.45, armEnd.x, armEnd.y, 0.09, '#f5c99b');
-    ctx.fillStyle = '#f5c99b';
+    ctx.fillText('7', sx((hip.x + shoulder.x) / 2), sy(shoulder.y - 0.23));
+    drawArms(shoulder);
+    const head = { x: shoulder.x + 0.02, y: shoulder.y + 0.25 };
+    ctx.fillStyle = SKIN;
     ctx.beginPath();
-    ctx.arc(sx(x), sy(1.7), 0.14 * view.s, 0, Math.PI * 2);
+    ctx.arc(sx(head.x), sy(head.y), 0.14 * view.s, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#2b1a0e';
     ctx.beginPath();
-    ctx.arc(sx(x), sy(1.74), 0.14 * view.s, Math.PI, Math.PI * 2);
+    ctx.arc(sx(head.x), sy(head.y + 0.04), 0.14 * view.s, Math.PI, Math.PI * 2);
     ctx.fill();
+}
+
+function drawArms(shoulder) {
+    if (state.flying) {
+        const hand = { x: shoulder.x + 0.2, y: shoulder.y + 0.6 };
+        limb(shoulder, { x: shoulder.x + 0.1, y: shoulder.y + 0.3 }, hand, 0.09, SKIN);
+        line(hand.x, hand.y, hand.x + 0.08, hand.y - 0.07, 0.07, SKIN);
+        limb(shoulder, { x: shoulder.x + 0.02, y: shoulder.y + 0.28 }, { x: shoulder.x + 0.06, y: shoulder.y + 0.52 }, 0.08, SKIN);
+        return;
+    }
+    if (state.readyIn > 0) {
+        limb(shoulder, { x: shoulder.x + 0.06, y: shoulder.y - 0.3 }, { x: shoulder.x + 0.1, y: shoulder.y - 0.55 }, 0.09, SKIN);
+        return;
+    }
+    const ball = handPosition();
+    const under = { x: ball.x - 0.03, y: ball.y - BALL_RADIUS };
+    limb(shoulder, { x: shoulder.x + 0.16, y: (shoulder.y + under.y) / 2 - 0.05 }, under, 0.09, SKIN);
+    const side = { x: ball.x - BALL_RADIUS, y: ball.y + 0.02 };
+    limb(shoulder, { x: shoulder.x - 0.1, y: (shoulder.y + side.y) / 2 }, side, 0.08, SKIN);
 }
 
 function drawBall(x, y, rot) {
