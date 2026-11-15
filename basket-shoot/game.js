@@ -28,6 +28,7 @@ const JUMP = { sec: 0.55, height: 0.3 };
 const MAX_DIP = 0.15;
 const BACKSPIN = 14;
 const SKIN = '#f5c99b';
+const UNIFORM = { main: '#fb4f14', trim: '#002244', number: '#fff' };
 const FENCE = { bottom: 0.7, top: 1.15 };
 const FANS = [
     { x: 0.2, shirt: '#ff3ea5', hair: '#2b1a0e' },
@@ -457,15 +458,25 @@ function drawPlayer() {
     for (const side of [-1, 1]) {
         const foot = { x: x + side * 0.1 + air * 0.15, y: air };
         const knee = { x: (hip.x + foot.x) / 2 + 0.04 + dip * 1.4 + air * 0.2, y: (hip.y + foot.y) / 2 };
-        limb({ x: hip.x + side * 0.06, y: hip.y }, knee, foot, 0.12, SKIN);
+        const thigh = { x: hip.x + side * 0.06, y: hip.y };
+        limb(thigh, knee, foot, 0.12, SKIN);
         line(foot.x - 0.02, foot.y, foot.x + 0.12, foot.y, 0.08, '#fff');
+        const hem = { x: thigh.x + (knee.x - thigh.x) * 0.75, y: thigh.y + (knee.y - thigh.y) * 0.75 };
+        line(thigh.x, thigh.y + 0.05, hem.x, hem.y, 0.19, UNIFORM.trim);
+        line(hem.x, hem.y, hem.x + (knee.x - hem.x) * 0.15, hem.y + (knee.y - hem.y) * 0.15, 0.19, UNIFORM.main);
     }
-    line(hip.x, hip.y - 0.05, shoulder.x, shoulder.y, 0.32, '#2f6bff');
-    ctx.fillStyle = '#fff';
+    line(hip.x, hip.y - 0.05, shoulder.x, shoulder.y, 0.34, UNIFORM.trim);
+    line(hip.x, hip.y + 0.02, shoulder.x, shoulder.y - 0.04, 0.27, UNIFORM.main);
+    line(hip.x - 0.17, hip.y + 0.02, hip.x + 0.17, hip.y + 0.02, 0.06, UNIFORM.trim);
     ctx.font = `bold ${0.18 * view.s}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('7', sx((hip.x + shoulder.x) / 2), sy(shoulder.y - 0.23));
+    const numberAt = { x: sx((hip.x + shoulder.x) / 2), y: sy(shoulder.y - 0.23) };
+    ctx.lineWidth = 0.04 * view.s;
+    ctx.strokeStyle = UNIFORM.trim;
+    ctx.strokeText('7', numberAt.x, numberAt.y);
+    ctx.fillStyle = UNIFORM.number;
+    ctx.fillText('7', numberAt.x, numberAt.y);
     drawArms(shoulder);
     const head = { x: shoulder.x + 0.02, y: shoulder.y + 0.25 };
     ctx.fillStyle = SKIN;
