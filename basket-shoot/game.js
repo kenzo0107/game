@@ -1,3 +1,4 @@
+import { createBgm } from './bgm.js';
 import {
     BALL_RADIUS,
     RIM_HEIGHT,
@@ -151,6 +152,14 @@ const SOUNDS = {
     start: () => [523, 659, 784].forEach((f, i) => tone(f, 0.12, 'square', 0.05, i * 0.1)),
 };
 
+let bgm = null;
+function syncBgm() {
+    if (!audio) return;
+    bgm ??= createBgm(audio);
+    if (soundOn && state.phase === 'playing' && !document.hidden) bgm.start();
+    else bgm.stop();
+}
+
 function play(name) {
     if (!soundOn) return;
     if (state.clock - (lastSound[name] ?? -1) < 0.08) return;
@@ -188,6 +197,7 @@ function startGame() {
     });
     overlay.hidden = true;
     play('start');
+    syncBgm();
     renderHud();
 }
 
@@ -200,6 +210,7 @@ function endGame() {
         save('basketShootBest', best);
     }
     play('buzzer');
+    syncBgm();
     overlayTitle.textContent = isBest ? 'ベスト こうしん！' : 'タイムアップ！';
     overlayText.innerHTML = `<b>${state.score}</b> てん`;
     startButton.textContent = 'もういちど';
@@ -607,6 +618,7 @@ soundButton.addEventListener('click', () => {
     soundOn = !soundOn;
     save('basketShootSound', soundOn ? 'on' : 'off');
     renderSound();
+    syncBgm();
 });
 
 // 操作前の再生を許さないブラウザでは AudioContext が停止状態で作られるため、最初の操作の種類を問わず再開する
@@ -615,8 +627,10 @@ for (const type of ['pointerdown', 'touchend', 'keydown', 'click']) {
         try {
             audioContext();
         } catch {}
+        syncBgm();
     });
 }
+document.addEventListener('visibilitychange', syncBgm);
 
 let last = performance.now();
 function frame(now) {
