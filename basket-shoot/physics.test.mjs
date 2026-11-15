@@ -7,7 +7,9 @@ import {
     createBall,
     createHoop,
     hoopCenterX,
+    SHOT_DISTANCE,
     launchVelocity,
+    nextShotDistance,
     shotPoints,
     step,
 } from './physics.js';
@@ -76,4 +78,23 @@ test('ドラッグが長すぎても投げる速さは上限で止まり、向�
     assert.ok(Math.abs(Math.hypot(vx, vy) - 13) < 1e-9);
     assert.ok(Math.abs(vx - vy) < 1e-9);
     assert.deepEqual(launchVelocity(1, 2), { vx: 2.8, vy: 5.6 });
+});
+
+test('決めたら次はゴールから一歩離れる', () => {
+    assert.equal(nextShotDistance(SHOT_DISTANCE.min, true), SHOT_DISTANCE.min + SHOT_DISTANCE.step);
+});
+
+test('外したら同じ場所からもう一度打つ', () => {
+    assert.equal(nextShotDistance(4, false), 4);
+});
+
+test('いちばん遠い場所より先には離れない', () => {
+    assert.equal(nextShotDistance(SHOT_DISTANCE.max - 0.1, true), SHOT_DISTANCE.max);
+    assert.equal(nextShotDistance(SHOT_DISTANCE.max, true), SHOT_DISTANCE.max);
+});
+
+test('近くから決め続けると 3P ラインの外まで届く', () => {
+    let distance = SHOT_DISTANCE.min;
+    for (let i = 0; i < 10; i++) distance = nextShotDistance(distance, true);
+    assert.ok(distance >= THREE_POINT_DISTANCE);
 });

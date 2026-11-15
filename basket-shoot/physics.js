@@ -27,6 +27,12 @@ export function shotPoints(shooterX, hoop) {
     return hoopCenterX(hoop) - shooterX >= THREE_POINT_DISTANCE ? 3 : 2;
 }
 
+export const SHOT_DISTANCE = { min: 2.4, max: 7.4, step: 0.8 };
+
+export function nextShotDistance(distance, scored) {
+    return scored ? Math.min(distance + SHOT_DISTANCE.step, SHOT_DISTANCE.max) : distance;
+}
+
 export function launchVelocity(dragX, dragY) {
     const vx = dragX * LAUNCH_GAIN;
     const vy = dragY * LAUNCH_GAIN;

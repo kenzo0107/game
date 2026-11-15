@@ -4,7 +4,9 @@ import {
     THREE_POINT_DISTANCE,
     createBall,
     createHoop,
+    SHOT_DISTANCE,
     hoopCenterX,
+    nextShotDistance,
     launchVelocity,
     shotPoints,
     step,
@@ -15,7 +17,6 @@ const DT = 1 / 240;
 const VIEW = { left: -0.6, width: 10.6, height: 5.8, floorDepth: 0.6 };
 const HOOP = createHoop(9);
 const POLE_X = 9.75;
-const SHOT_DISTANCE = { min: 2.4, max: 7.4 };
 const HAND = { dx: 0.15, y: 2.1 };
 const MIN_DRAG = 0.25;
 const AIM_PREVIEW_SEC = 0.35;
@@ -54,6 +55,7 @@ const state = {
     phase: 'title',
     score: 0,
     timeLeft: GAME_SECONDS,
+    shotDistance: SHOT_DISTANCE.min,
     shooterX: 0,
     shotFromX: 0,
     ball: null,
@@ -161,10 +163,7 @@ function play(name) {
 const handPosition = () => ({ x: state.shooterX + HAND.dx, y: HAND.y });
 const canThrow = () => state.phase === 'playing' && !state.flying && state.readyIn <= 0 && state.timeLeft > 0;
 
-function pickShooterX() {
-    const distance = SHOT_DISTANCE.min + Math.random() * (SHOT_DISTANCE.max - SHOT_DISTANCE.min);
-    return hoopCenterX(HOOP) - distance;
-}
+const shooterXAt = (distance) => hoopCenterX(HOOP) - distance;
 
 function renderHud() {
     scoreEl.textContent = state.score;
@@ -178,7 +177,8 @@ function startGame() {
         phase: 'playing',
         score: 0,
         timeLeft: GAME_SECONDS,
-        shooterX: hoopCenterX(HOOP) - 3,
+        shotDistance: SHOT_DISTANCE.min,
+        shooterX: shooterXAt(SHOT_DISTANCE.min),
         ball: null,
         flying: false,
         readyIn: 0,
@@ -222,10 +222,12 @@ function throwBall(dragX, dragY) {
 }
 
 function resolveShot() {
-    if (!state.ball.scored && state.ball.touchedRim) addPopup('おしい！', '#a9a2d6');
+    const { scored, touchedRim } = state.ball;
+    if (!scored && touchedRim) addPopup('おしい！', '#a9a2d6');
     state.flying = false;
     state.ball = null;
-    state.shooterX = pickShooterX();
+    state.shotDistance = nextShotDistance(state.shotDistance, scored);
+    state.shooterX = shooterXAt(state.shotDistance);
     state.readyIn = NEXT_BALL_DELAY_SEC;
     if (state.timeLeft <= 0) endGame();
 }
@@ -628,7 +630,7 @@ function frame(now) {
 
 window.addEventListener('resize', resize);
 resize();
-state.shooterX = hoopCenterX(HOOP) - 3;
+state.shooterX = shooterXAt(SHOT_DISTANCE.min);
 renderHud();
 renderSound();
 requestAnimationFrame(frame);
