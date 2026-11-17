@@ -11,6 +11,7 @@ import { Music } from './music';
 import { RocketBelt, RocketCrashCause } from './rocket';
 import { SONGS } from './songs';
 import { Speedometer } from './speedometer';
+import { AltitudeTape, AttitudeIndicator, ThrottleGauge } from './instruments';
 import { CrashCause, Skydiver } from './skydiver';
 import { Sound } from './sound';
 import { STAGES, StageConfig } from './stages';
@@ -139,6 +140,9 @@ class Game {
   private fuelGauge = document.getElementById('fuel-gauge') as HTMLElement;
   private fuelBar = document.getElementById('fuel-bar') as HTMLElement;
   private speedometer = new Speedometer(document.getElementById('speedometer') as HTMLElement, Aircraft.STALL_SPEED, Aircraft.MAX_SPEED);
+  private throttleGauge = new ThrottleGauge(document.getElementById('throttle-gauge') as HTMLElement);
+  private attitude = new AttitudeIndicator(document.getElementById('attitude') as HTMLElement);
+  private altimeter = new AltitudeTape(document.getElementById('altimeter') as HTMLElement, LOW_ALTITUDE);
 
   constructor() {
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
@@ -411,9 +415,10 @@ class Game {
       return;
     }
     this.speedometer.update(vehicle.getSpeed());
-    this.setText('throttle', (vehicle.getThrottle() * 100).toFixed(0));
-    this.setText('pitch', ((vehicle.getPitchAngle() * 180) / Math.PI).toFixed(1));
-    this.setText('roll', ((vehicle.getRollAngle() * 180) / Math.PI).toFixed(1));
+    this.throttleGauge.update(vehicle.getThrottle());
+    // 機首は +Z 向きなので、rotation.x が正のときは機首下げになる
+    this.attitude.update(-vehicle.getPitchAngle(), vehicle.getRollAngle());
+    this.altimeter.update(vehicle.getAltitude(), this.isTooLow());
     this.setFuelGauge(vehicle.getFuel());
   }
 

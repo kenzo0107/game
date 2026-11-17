@@ -103,13 +103,141 @@
       background: #33dd55;
       transition: background-color 0.3s;
     }
-    #speedometer {
-      width: 150px;
-      margin: 4px auto;
+    #cockpit {
+      position: absolute;
+      left: 50%;
+      bottom: max(12px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      padding: 8px 14px 4px;
+      border: 1px solid rgba(120, 200, 255, 0.35);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(16, 26, 38, 0.85), rgba(4, 8, 14, 0.92));
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      font-family: 'Courier New', monospace;
+      pointer-events: none;
     }
-    #speedometer svg {
+    #cockpit svg {
       display: block;
-      width: 100%;
+      height: 140px;
+      width: auto;
+    }
+    .gauge-bezel {
+      fill: #0a1018;
+      stroke: #3d5266;
+      stroke-width: 2;
+    }
+    .gauge-panel {
+      fill: #0a1018;
+      stroke: #3d5266;
+      stroke-width: 1.5;
+    }
+    .gauge-label {
+      fill: #8fb6d4;
+      font-size: 8px;
+      font-weight: bold;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    .gauge-value {
+      fill: #ffe14d;
+      font-size: 10px;
+    }
+    .att-horizon {
+      stroke: #ffffff;
+      stroke-width: 1.5;
+    }
+    .att-ladder,
+    .att-bank-mark {
+      stroke: #ffffff;
+      stroke-width: 1.2;
+    }
+    .att-ladder-label {
+      fill: #ffffff;
+      font-size: 6px;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    .att-bank-pointer {
+      fill: #ffffff;
+    }
+    .att-index {
+      fill: #ffe14d;
+    }
+    .att-aircraft {
+      fill: none;
+      stroke: #ffaa00;
+      stroke-width: 3.5;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9));
+    }
+    .att-aircraft-dot {
+      fill: #ffaa00;
+    }
+    .att-rim {
+      fill: none;
+      stroke: rgba(0, 0, 0, 0.6);
+      stroke-width: 2;
+    }
+    .alt-tick {
+      stroke: #ffffff;
+      stroke-width: 1.2;
+    }
+    .alt-label {
+      fill: #ffffff;
+      font-size: 8px;
+      dominant-baseline: central;
+    }
+    .alt-ground {
+      fill: #5a3414;
+    }
+    .alt-low-band {
+      fill: #ff3333;
+    }
+    .alt-box {
+      fill: #000000;
+      stroke: #ffe14d;
+      stroke-width: 1.5;
+    }
+    .alt-readout {
+      fill: #ffe14d;
+      font-size: 13px;
+      font-weight: bold;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    #altimeter[data-zone="low"] .alt-box {
+      stroke: #ff3333;
+      fill: #5a0a0a;
+    }
+    #altimeter[data-zone="low"] .alt-readout {
+      fill: #ffffff;
+    }
+    .thr-seg {
+      opacity: 0.15;
+      transition: opacity 0.1s;
+    }
+    .thr-seg.on {
+      opacity: 1;
+    }
+    .thr-low {
+      fill: #33dd55;
+    }
+    .thr-mid {
+      fill: #ffe14d;
+    }
+    .thr-high {
+      fill: #ff8800;
+    }
+    .thr-readout {
+      fill: #ffe14d;
+      font-size: 9px;
+      font-weight: bold;
+      text-anchor: middle;
+      dominant-baseline: central;
     }
     .speedo-track,
     .speedo-stall,
@@ -166,7 +294,8 @@
     body:not([data-mode="skydive"]) .skydive-only,
     body:not([data-mode="rocket"]) .rocket-only,
     body[data-mode="skydive"] .has-fuel,
-    body[data-mode="flight"] .has-target {
+    body[data-mode="flight"] .has-target,
+    body[data-mode="flight"] .no-flight {
       display: none !important;
     }
     @media (pointer: coarse) {
@@ -180,8 +309,14 @@
         font-size: 11px;
         min-width: 0;
       }
-      #speedometer {
-        width: 100px;
+      #cockpit {
+        bottom: max(8px, env(safe-area-inset-bottom));
+        gap: 6px;
+        padding: 4px 8px 2px;
+        border-radius: 12px;
+      }
+      #cockpit svg {
+        height: 84px;
       }
       #stage-badge {
         font-size: 13px;
@@ -417,15 +552,9 @@
     <div>リング: <span id="rings">0</span></div>
     <div>ポイント: <span id="points">0</span></div>
     <div>風: <span id="wind">なし</span></div>
-    <div>高度: <span id="altitude">0</span></div>
+    <div class="no-flight">高度: <span id="altitude">0</span></div>
     <div class="has-fuel fuel-row">燃料:
       <div id="fuel-gauge" role="meter" aria-label="燃料" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="fuel-bar"></div></div>
-    </div>
-    <div class="flight-only">
-      <div id="speedometer" role="meter" aria-label="速度" aria-valuemin="0" aria-valuenow="0"></div>
-      <div>スロットル: <span id="throttle">0</span>%</div>
-      <div>ピッチ角: <span id="pitch">0</span>°</div>
-      <div>ロール角: <span id="roll">0</span>°</div>
     </div>
     <div class="skydive-only">
       <div>落下速度: <span id="fall-speed">0</span></div>
@@ -433,6 +562,12 @@
     </div>
     <div class="rocket-only">上下速度: <span id="vertical-speed">0</span></div>
     <div class="has-target">的まで: <span id="target">0</span></div>
+  </div>
+  <div id="cockpit" class="flight-only">
+    <div id="throttle-gauge" role="meter" aria-label="スロットル" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+    <div id="speedometer" role="meter" aria-label="速度" aria-valuemin="0" aria-valuenow="0"></div>
+    <div id="attitude" role="img" aria-label="姿勢指示器"></div>
+    <div id="altimeter" role="meter" aria-label="高度" aria-valuemin="0" aria-valuenow="0"></div>
   </div>
   <div id="touch-controls">
     <div id="stick"><div id="stick-knob"></div></div>
