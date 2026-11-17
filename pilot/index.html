@@ -251,6 +251,35 @@
       pointer-events: none;
       animation: low-altitude-blink 0.9s steps(2, jump-none) infinite;
     }
+    #points-popup {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, 0);
+      color: #ffdd55;
+      font-size: 40px;
+      font-weight: bold;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+      opacity: 0;
+      pointer-events: none;
+    }
+    #points-popup.show {
+      animation: points-pop 1s ease-out;
+    }
+    @keyframes points-pop {
+      0% {
+        opacity: 0;
+        transform: translate(-50%, 10px) scale(0.6);
+      }
+      20% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1.15);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -40px) scale(1);
+      }
+    }
     #low-altitude[hidden] {
       display: none;
     }
@@ -299,6 +328,7 @@
     <div style="font-weight: bold; margin-bottom: 5px;">飛行データ:</div>
     <div>ステージ: <span id="stage">1</span></div>
     <div>リング: <span id="rings">0</span></div>
+    <div>ポイント: <span id="points">0</span></div>
     <div>風: <span id="wind">なし</span></div>
     <div>高度: <span id="altitude">0</span></div>
     <div class="has-fuel fuel-row">燃料:
@@ -328,6 +358,7 @@
     </div>
   </div>
   <div id="banner" aria-live="polite"></div>
+  <div id="points-popup" aria-hidden="true"></div>
   <div id="low-altitude" role="alert" hidden></div>
   <div id="overlay" hidden></div>
   <script type="module" src="/src/main.ts"></script>

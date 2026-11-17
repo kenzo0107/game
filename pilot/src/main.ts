@@ -74,6 +74,8 @@ const saveSongIndex = (index: number): void => {
 
 const CLEAR_TAP_DELAY_MS = 800;
 
+const RING_POINTS = 100;
+
 const LOW_ALTITUDE = 12;
 const LOW_ALTITUDE_ALERT_INTERVAL = 0.9;
 
@@ -131,6 +133,8 @@ class Game {
   private explosion: Explosion | null = null;
   private primaryAction: (() => void) | null = null;
   private bannerTimer = 0;
+  private points = 0;
+  private pointsPopup = document.getElementById('points-popup') as HTMLElement;
   private fuelGauge = document.getElementById('fuel-gauge') as HTMLElement;
   private fuelBar = document.getElementById('fuel-bar') as HTMLElement;
 
@@ -212,6 +216,7 @@ class Game {
   private startStage(index: number): void {
     this.loadStage(index);
     this.phase = 'playing';
+    this.points = 0;
     this.music.setMode('flight');
     this.hideOverlay();
     const stage = STAGES[index];
@@ -313,6 +318,7 @@ class Game {
     const lines = [
       starText(stars),
       `リング ${this.rings.passedCount}/${this.rings.total}${allRings ? ' ★' : ''}`,
+      `ポイント ${this.points}`,
       vehicle instanceof Aircraft
         ? precise
           ? '滑走路の上でとまれた ★'
@@ -329,6 +335,17 @@ class Game {
       if (isLast) this.showMenu();
       else this.startStage(i + 1);
     };
+  }
+
+  private addRingPoints(passed: number): void {
+    const gained = passed * RING_POINTS;
+    this.points += gained;
+    this.sound.ring();
+    this.pointsPopup.textContent = `+${gained}`;
+    this.pointsPopup.classList.remove('show');
+    // 連続でくぐったときもアニメーションを最初から再生させるため、リフローを挟んでからクラスを付け直す
+    void this.pointsPopup.offsetWidth;
+    this.pointsPopup.classList.add('show');
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -376,6 +393,7 @@ class Game {
     const wind = STAGES[this.stageIndex].wind;
     this.setText('stage', `${this.stageIndex + 1}/${STAGES.length}`);
     this.setText('rings', `${this.rings.passedCount}/${this.rings.total}`);
+    this.setText('points', String(this.points));
     this.setText('wind', Math.hypot(wind.x, wind.z) === 0 ? 'なし' : Math.hypot(wind.x, wind.z).toFixed(1));
     this.setText('altitude', vehicle.getAltitude().toFixed(1));
     if (vehicle instanceof Skydiver) {
@@ -436,7 +454,8 @@ class Game {
       } else {
         this.sound.setThrust(vehicle.getThrustNoise());
       }
-      if (this.rings.update(vehicle.getPosition()) > 0) this.sound.ring();
+      const passed = this.rings.update(vehicle.getPosition());
+      if (passed > 0) this.addRingPoints(passed);
 
       if (vehicle.isCrashed()) {
         this.stopLoops();
