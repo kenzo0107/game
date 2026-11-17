@@ -103,7 +103,7 @@ const ROCKET_CRASH_MESSAGES: Record<RocketCrashCause, [string, string]> = {
   fuel: ['燃料が切れた…', '燃料が残っているうちに的へ降りよう'],
 };
 
-const fuelColor = (fuel: number): string => (fuel <= 0 ? '#ff0000' : fuel < LOW_FUEL ? '#ff6600' : '#ffff00');
+const fuelColor = (fuel: number): string => (fuel <= 0 ? '#ff0000' : fuel < LOW_FUEL ? '#ff6600' : '#33dd55');
 
 const starText = (count: number): string => '★'.repeat(count) + '☆'.repeat(3 - count);
 
@@ -130,6 +130,8 @@ class Game {
   private explosion: Explosion | null = null;
   private primaryAction: (() => void) | null = null;
   private bannerTimer = 0;
+  private fuelGauge = document.getElementById('fuel-gauge') as HTMLElement;
+  private fuelBar = document.getElementById('fuel-bar') as HTMLElement;
 
   constructor() {
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
@@ -361,6 +363,13 @@ class Game {
     if (color) el.style.color = color;
   }
 
+  private setFuelGauge(fuel: number): void {
+    const percent = Math.max(0, Math.min(100, fuel));
+    this.fuelBar.style.width = `${percent}%`;
+    this.fuelBar.style.backgroundColor = fuelColor(fuel);
+    this.fuelGauge.setAttribute('aria-valuenow', percent.toFixed(0));
+  }
+
   private updateHUD(): void {
     const vehicle = this.vehicle;
     const wind = STAGES[this.stageIndex].wind;
@@ -375,17 +384,16 @@ class Game {
       return;
     }
     if (vehicle instanceof RocketBelt) {
-      this.setText('fuel', vehicle.getFuel().toFixed(1), fuelColor(vehicle.getFuel()));
+      this.setFuelGauge(vehicle.getFuel());
       this.setText('vertical-speed', vehicle.getVerticalSpeed().toFixed(1));
       this.setText('target', vehicle.getTargetDistance().toFixed(1));
       return;
     }
-    const fuel = vehicle.getFuel();
     this.setText('speed', vehicle.getSpeed().toFixed(1));
     this.setText('throttle', (vehicle.getThrottle() * 100).toFixed(0));
     this.setText('pitch', ((vehicle.getPitchAngle() * 180) / Math.PI).toFixed(1));
     this.setText('roll', ((vehicle.getRollAngle() * 180) / Math.PI).toFixed(1));
-    this.setText('fuel', fuel.toFixed(1), fuelColor(fuel));
+    this.setFuelGauge(vehicle.getFuel());
   }
 
   private isTooLow(): boolean {

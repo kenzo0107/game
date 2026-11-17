@@ -62,6 +62,26 @@
       color: #ffff00;
       font-weight: bold;
     }
+    .fuel-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #fuel-gauge {
+      flex: 1;
+      min-width: 80px;
+      height: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.15);
+      overflow: hidden;
+    }
+    #fuel-bar {
+      width: 100%;
+      height: 100%;
+      background: #33dd55;
+      transition: background-color 0.3s;
+    }
     #touch-controls {
       display: none;
     }
@@ -281,7 +301,9 @@
     <div>リング: <span id="rings">0</span></div>
     <div>風: <span id="wind">なし</span></div>
     <div>高度: <span id="altitude">0</span></div>
-    <div class="has-fuel">燃料: <span id="fuel">100</span>%</div>
+    <div class="has-fuel fuel-row">燃料:
+      <div id="fuel-gauge" role="meter" aria-label="燃料" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="fuel-bar"></div></div>
+    </div>
     <div class="flight-only">
       <div>速度: <span id="speed">0</span></div>
       <div>スロットル: <span id="throttle">0</span>%</div>
