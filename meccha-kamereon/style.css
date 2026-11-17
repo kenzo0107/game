@@ -1,0 +1,227 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #123d2a;
+    --panel: rgba(14, 40, 28, 0.9);
+    --edge: #3fae4a;
+    --text: #f4fff2;
+    --muted: #a7d6ad;
+    --accent: #ff6fb1;
+    --yellow: #ffd23f;
+}
+
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+body {
+    font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#stage {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.hud {
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    pointer-events: none;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.hud .label {
+    margin-right: 6px;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--text);
+}
+
+.hud b {
+    font-size: 1.5rem;
+    color: var(--yellow);
+    font-variant-numeric: tabular-nums;
+}
+
+.hud .ammo {
+    color: #ff3ea5;
+    letter-spacing: 0.05em;
+}
+
+.hud [hidden] {
+    display: none;
+}
+
+button {
+    font: inherit;
+    font-weight: bold;
+    color: var(--text);
+    background: var(--accent);
+    border: 3px solid #000;
+    border-radius: 12px;
+    padding: 12px 28px;
+    cursor: pointer;
+    touch-action: manipulation;
+    box-shadow: 4px 4px 0 #000;
+}
+
+button:active {
+    transform: translate(4px, 4px);
+    box-shadow: none;
+}
+
+#sound {
+    margin-left: auto;
+    padding: 4px 12px;
+    font-size: 1rem;
+    background: var(--panel);
+    border-color: var(--edge);
+    box-shadow: none;
+    pointer-events: auto;
+}
+
+#sound[aria-pressed='false'] {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.controls {
+    position: fixed;
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.controls[hidden] {
+    display: none;
+}
+
+.poses,
+.palette {
+    display: flex;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+@media (max-width: 960px) {
+    .poses {
+        display: grid;
+        grid-template-columns: repeat(5, auto);
+        gap: 6px;
+    }
+}
+
+.pose {
+    min-width: 50px;
+    padding: 4px;
+    font-size: 0.65rem;
+    color: #000;
+    background: #fff;
+    box-shadow: 3px 3px 0 #000;
+}
+
+.pose svg {
+    display: block;
+    width: 24px;
+    height: 24px;
+    margin: 0 auto 2px;
+}
+
+.pose[aria-pressed='true'],
+.swatch[aria-pressed='true'] {
+    outline: 4px solid var(--yellow);
+    outline-offset: 2px;
+}
+
+.swatch {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--swatch);
+    box-shadow: 3px 3px 0 #000;
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.overlay[hidden] {
+    display: none;
+}
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 460px;
+    padding: 24px 28px;
+    text-align: center;
+    background: var(--panel);
+    border: 3px solid var(--edge);
+    border-radius: 16px;
+}
+
+.panel h1 {
+    font-size: 1.8rem;
+    letter-spacing: 0.08em;
+    color: var(--yellow);
+    text-shadow: 3px 3px 0 #000;
+}
+
+.panel p {
+    line-height: 1.8;
+    color: var(--text);
+}
+
+.modes {
+    display: flex;
+    gap: 16px;
+}
+
+.modes .oni {
+    background: #7a4cff;
+}
+
+.panel .best {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.panel p b {
+    font-size: 2.2rem;
+    color: var(--yellow);
+}
