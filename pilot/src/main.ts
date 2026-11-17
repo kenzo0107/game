@@ -7,6 +7,7 @@ import { InputController } from './input';
 import { Explosion } from './explosion';
 import { Terrain } from './terrain';
 import { Rings } from './rings';
+import { RingTracker, WindIndicator } from './hud';
 import { Music } from './music';
 import { RocketBelt, RocketCrashCause } from './rocket';
 import { SONGS } from './songs';
@@ -148,6 +149,8 @@ class Game {
   private speedometer = new Speedometer(document.getElementById('speedometer') as HTMLElement, Aircraft.STALL_SPEED, Aircraft.MAX_SPEED);
   private throttleGauge = new ThrottleGauge(document.getElementById('throttle-gauge') as HTMLElement);
   private attitude = new AttitudeIndicator(document.getElementById('attitude') as HTMLElement);
+  private ringTracker = new RingTracker(document.getElementById('ring-tracker') as HTMLElement);
+  private windIndicator = new WindIndicator(document.getElementById('wind') as HTMLElement);
   private altimeter = new AltitudeTape(document.getElementById('altimeter') as HTMLElement, LOW_ALTITUDE);
 
   constructor() {
@@ -411,11 +414,10 @@ class Game {
 
   private updateHUD(): void {
     const vehicle = this.vehicle;
-    const wind = STAGES[this.stageIndex].wind;
     this.setText('stage', String(this.stageIndex + 1));
-    this.setText('rings', `${this.rings.passedCount}/${this.rings.total}`);
+    this.ringTracker.update(this.rings.statuses());
     this.setText('points', String(this.points));
-    this.setText('wind', Math.hypot(wind.x, wind.z) === 0 ? 'なし' : Math.hypot(wind.x, wind.z).toFixed(1));
+    this.windIndicator.update(STAGES[this.stageIndex].wind, this.camera);
     this.setText('altitude', vehicle.getAltitude().toFixed(1));
     if (vehicle instanceof Skydiver) {
       this.setText('fall-speed', vehicle.getFallSpeed().toFixed(1));

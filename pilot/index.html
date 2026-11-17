@@ -83,6 +83,120 @@
       color: #ffff00;
       font-weight: bold;
     }
+    .hud-badges {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    body:not([data-mode="flight"]) .hud-badges {
+      margin-bottom: 6px;
+    }
+    .hud-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #ffffff;
+      font-family: 'Arial', sans-serif;
+      font-weight: bold;
+    }
+    .hud-icon {
+      width: 26px;
+      height: 26px;
+      flex: none;
+    }
+    .ring-tracker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      max-width: 170px;
+    }
+    .ring-icon {
+      width: 20px;
+      height: 20px;
+    }
+    .ring-icon-band {
+      fill: none;
+      stroke: rgba(255, 204, 0, 0.55);
+      stroke-width: 3;
+    }
+    .ring-icon-check {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      visibility: hidden;
+    }
+    .ring-icon[data-state="next"] .ring-icon-band {
+      stroke: #ff7700;
+      animation: ring-next 1s ease-in-out infinite alternate;
+    }
+    .ring-icon[data-state="passed"] .ring-icon-band {
+      fill: #33dd88;
+      stroke: #33dd88;
+    }
+    .ring-icon[data-state="passed"] .ring-icon-check {
+      visibility: visible;
+    }
+    @keyframes ring-next {
+      to {
+        stroke: #ffcc00;
+      }
+    }
+    .hud-points {
+      color: #ffdd55;
+      font-size: 22px;
+      font-variant-numeric: tabular-nums;
+    }
+    .wind {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wind-dial {
+      width: 38px;
+      height: 38px;
+      flex: none;
+    }
+    .wind-dial-face {
+      fill: rgba(120, 200, 255, 0.15);
+      stroke: rgba(120, 200, 255, 0.6);
+      stroke-width: 1.5;
+    }
+    .wind-dial-mark {
+      fill: #ffffff;
+    }
+    .wind-arrow-body {
+      fill: #78c8ff;
+    }
+    .wind[data-level="none"] .wind-arrow {
+      display: none;
+    }
+    .wind[data-level="medium"] .wind-arrow-body {
+      fill: #ffcc00;
+    }
+    .wind[data-level="strong"] .wind-arrow-body {
+      fill: #ff5533;
+    }
+    #hud .wind-label {
+      color: #ffffff;
+    }
+    #hud .hud-badge-label {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.85em;
+      font-weight: bold;
+    }
+    .wind-label::before {
+      content: '風 ';
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.85em;
+    }
+    #hud .wind[data-level="none"] .wind-label {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    #hud .wind[data-level="strong"] .wind-label {
+      color: #ff7755;
+    }
     .fuel-row {
       display: flex;
       align-items: center;
@@ -353,6 +467,27 @@
         font-size: 11px;
         min-width: 0;
       }
+      .hud-badges {
+        gap: 3px;
+      }
+      .hud-icon {
+        width: 20px;
+        height: 20px;
+      }
+      .ring-icon {
+        width: 15px;
+        height: 15px;
+      }
+      .ring-tracker {
+        max-width: 120px;
+      }
+      .hud-points {
+        font-size: 16px;
+      }
+      .wind-dial {
+        width: 30px;
+        height: 30px;
+      }
       #cockpit {
         bottom: max(8px, env(safe-area-inset-bottom));
         gap: 3px;
@@ -602,10 +737,19 @@
   </div>
   <div id="stage-badge">ステージ <span id="stage">1</span></div>
   <div id="hud">
-    <div style="font-weight: bold; margin-bottom: 5px;">飛行データ:</div>
-    <div>リング: <span id="rings">0</span></div>
-    <div>ポイント: <span id="points">0</span></div>
-    <div>風: <span id="wind">なし</span></div>
+    <div class="hud-badges">
+      <div class="hud-badge" title="リング">
+        <span class="hud-badge-label" aria-hidden="true">リング</span>
+        <div id="ring-tracker" class="ring-tracker" role="img" aria-label="リング"></div>
+      </div>
+      <div class="hud-badge" title="ポイント">
+        <svg class="hud-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#ffcc00" stroke="#b37700" stroke-width="2"/><path d="M12 5.5 13.9 9.6 18.3 10 15 13 16 17.4 12 15.1 8 17.4 9 13 5.7 10 10.1 9.6Z" fill="#fff6c8"/></svg>
+        <span id="points" class="hud-points" aria-label="ポイント">0</span>
+      </div>
+      <div class="hud-badge" title="風">
+        <div id="wind" class="wind" role="img" aria-label="風"></div>
+      </div>
+    </div>
     <div class="no-flight">高度: <span id="altitude">0</span></div>
     <div class="has-fuel no-flight fuel-row">燃料:
       <div id="fuel-gauge" role="meter" aria-label="燃料" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="fuel-bar"></div></div>

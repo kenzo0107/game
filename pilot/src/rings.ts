@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Placement } from './stages';
 
+export type RingStatus = 'passed' | 'next' | 'idle';
+
 const RING_RADIUS = 9;
 const FLAT_RING_RADIUS = 12;
 
@@ -41,10 +43,15 @@ export class Rings {
   }
 
   private highlightNext(): void {
+    const materials = { passed: this.passedMaterial, next: this.nextMaterial, idle: this.idleMaterial };
+    this.statuses().forEach((status, i) => {
+      this.rings[i].mesh.material = materials[status];
+    });
+  }
+
+  public statuses(): RingStatus[] {
     const next = this.rings.find((r) => !r.passed);
-    for (const ring of this.rings) {
-      ring.mesh.material = ring.passed ? this.passedMaterial : ring === next ? this.nextMaterial : this.idleMaterial;
-    }
+    return this.rings.map((r) => (r.passed ? 'passed' : r === next ? 'next' : 'idle'));
   }
 
   public update(position: THREE.Vector3): number {
