@@ -1,5 +1,6 @@
 import '../../shared/landscape.js'
 import '../../shared/audio-session.js'
+import '../../shared/no-zoom.js'
 import { Sound } from './audio'
 import { COURSES, THROWS_PER_STAGE, findCourse, obstaclesAt, type Course, type ObstacleDef } from './challenge'
 import { BALL_RADIUS, BALL_START_Y, LANE, createBall, createPins, isSettled, step, type Ball, type Pin } from './physics'

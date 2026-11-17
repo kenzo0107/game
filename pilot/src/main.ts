@@ -1,5 +1,6 @@
 import '../../shared/landscape.js';
 import '../../shared/audio-session.js';
+import '../../shared/no-zoom.js';
 import * as THREE from 'three';
 import { Aircraft } from './aircraft';
 import { InputController } from './input';
