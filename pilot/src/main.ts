@@ -10,6 +10,7 @@ import { Rings } from './rings';
 import { Music } from './music';
 import { RocketBelt, RocketCrashCause } from './rocket';
 import { SONGS } from './songs';
+import { Speedometer } from './speedometer';
 import { CrashCause, Skydiver } from './skydiver';
 import { Sound } from './sound';
 import { STAGES, StageConfig } from './stages';
@@ -137,6 +138,7 @@ class Game {
   private pointsPopup = document.getElementById('points-popup') as HTMLElement;
   private fuelGauge = document.getElementById('fuel-gauge') as HTMLElement;
   private fuelBar = document.getElementById('fuel-bar') as HTMLElement;
+  private speedometer = new Speedometer(document.getElementById('speedometer') as HTMLElement, Aircraft.STALL_SPEED, Aircraft.MAX_SPEED);
 
   constructor() {
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
@@ -408,7 +410,7 @@ class Game {
       this.setText('target', vehicle.getTargetDistance().toFixed(1));
       return;
     }
-    this.setText('speed', vehicle.getSpeed().toFixed(1));
+    this.speedometer.update(vehicle.getSpeed());
     this.setText('throttle', (vehicle.getThrottle() * 100).toFixed(0));
     this.setText('pitch', ((vehicle.getPitchAngle() * 180) / Math.PI).toFixed(1));
     this.setText('roll', ((vehicle.getRollAngle() * 180) / Math.PI).toFixed(1));

@@ -33,7 +33,7 @@ export class Aircraft {
   private readonly LEVEL_OUT_RATE = 3;
 
   // 飛行パラメータ
-  private readonly MAX_SPEED = 50;
+  static readonly MAX_SPEED = 50;
   private readonly MIN_SPEED = 10;
   private readonly ACCELERATION = 5;
   private readonly PITCH_SPEED = 0.15;  // 上下の動きを遅く
@@ -44,7 +44,7 @@ export class Aircraft {
   private readonly LIFT_COEFFICIENT = 0.25;  // 揚力をさらに弱く（降下しやすく）
   private readonly DRAG_COEFFICIENT = 0.1;
   private readonly GRAVITY = 6.0;  // 重力を弱く（ゆっくり降下）
-  private readonly STALL_SPEED = 8;
+  static readonly STALL_SPEED = 8;
   private readonly STALL_PITCH_RATE = 0.6;
   private readonly MAX_STALL_PITCH = Math.PI / 3;
   private readonly SINK_RECOVERY_RATE = 1.5;
@@ -250,7 +250,7 @@ export class Aircraft {
   }
 
   private applyStall(airspeed: number, delta: number): void {
-    const liftRatio = Math.min(1, airspeed / this.STALL_SPEED);
+    const liftRatio = Math.min(1, airspeed / Aircraft.STALL_SPEED);
     const stall = 1 - liftRatio;
     this.sinkSpeed += this.GRAVITY * stall * delta;
     this.sinkSpeed *= Math.exp(-this.SINK_RECOVERY_RATE * liftRatio * delta);
@@ -325,7 +325,7 @@ export class Aircraft {
     let acceleration = 0;
 
     if (hasFuel) {
-      const targetSpeed = this.MIN_SPEED + (this.MAX_SPEED - this.MIN_SPEED) * this.throttle;
+      const targetSpeed = this.MIN_SPEED + (Aircraft.MAX_SPEED - this.MIN_SPEED) * this.throttle;
       const speedDiff = targetSpeed - currentSpeed;
       acceleration = speedDiff * this.ACCELERATION * delta;
     }
