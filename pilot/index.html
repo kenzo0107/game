@@ -46,6 +46,27 @@
       border-radius: 5px;
       font-size: 14px;
     }
+    #stage-badge {
+      position: absolute;
+      top: max(10px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 4px 18px;
+      border: 2px solid #ffdd55;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.6);
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: bold;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    #stage-badge span {
+      color: #ffdd55;
+      font-size: 28px;
+      margin-left: 4px;
+      vertical-align: -2px;
+    }
     #hud {
       position: absolute;
       top: 10px;
@@ -161,6 +182,13 @@
       }
       #speedometer {
         width: 100px;
+      }
+      #stage-badge {
+        font-size: 13px;
+        padding: 2px 12px;
+      }
+      #stage-badge span {
+        font-size: 20px;
       }
       #touch-controls {
         display: block;
@@ -383,9 +411,9 @@
     <div>ロケットベルト: W 上昇 / S 下降 / 矢印 移動</div>
     <div>Enter: 決定 / R: やり直し</div>
   </div>
+  <div id="stage-badge">ステージ <span id="stage">1</span></div>
   <div id="hud">
     <div style="font-weight: bold; margin-bottom: 5px;">飛行データ:</div>
-    <div>ステージ: <span id="stage">1</span></div>
     <div>リング: <span id="rings">0</span></div>
     <div>ポイント: <span id="points">0</span></div>
     <div>風: <span id="wind">なし</span></div>

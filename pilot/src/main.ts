@@ -393,7 +393,7 @@ class Game {
   private updateHUD(): void {
     const vehicle = this.vehicle;
     const wind = STAGES[this.stageIndex].wind;
-    this.setText('stage', `${this.stageIndex + 1}/${STAGES.length}`);
+    this.setText('stage', String(this.stageIndex + 1));
     this.setText('rings', `${this.rings.passedCount}/${this.rings.total}`);
     this.setText('points', String(this.points));
     this.setText('wind', Math.hypot(wind.x, wind.z) === 0 ? 'なし' : Math.hypot(wind.x, wind.z).toFixed(1));
