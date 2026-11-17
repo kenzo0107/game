@@ -108,9 +108,8 @@
       left: 50%;
       bottom: max(12px, env(safe-area-inset-bottom));
       transform: translateX(-50%);
-      display: flex;
-      align-items: flex-end;
-      gap: 10px;
+      display: grid;
+      gap: 6px;
       padding: 8px 14px 4px;
       border: 1px solid rgba(120, 200, 255, 0.35);
       border-radius: 16px;
@@ -118,6 +117,51 @@
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       font-family: 'Courier New', monospace;
       pointer-events: none;
+    }
+    .cockpit-gauges {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .cockpit-fuel {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: bold;
+    }
+    .cockpit-fuel-label {
+      color: #8fb6d4;
+      font-size: 13px;
+    }
+    .cockpit-fuel-value {
+      min-width: 4ch;
+      color: #ffe14d;
+      font-size: 14px;
+      text-align: right;
+    }
+    .cockpit-fuel-track {
+      flex: 1;
+      height: 14px;
+      padding: 2px;
+      border: 1px solid #3d5266;
+      border-radius: 4px;
+      background: #0a1018;
+    }
+    #cockpit-fuel-bar {
+      height: 100%;
+      border-radius: 2px;
+      background: #33dd55;
+      box-shadow: 0 0 6px currentColor;
+      transition: background-color 0.3s;
+      -webkit-mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px);
+      mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px);
+    }
+    #cockpit[data-fuel="low"] .cockpit-fuel-value {
+      color: #ff6600;
+      animation: low-altitude-blink 0.9s steps(2, jump-none) infinite;
+    }
+    #cockpit[data-fuel="empty"] .cockpit-fuel-value {
+      color: #ff3333;
     }
     #cockpit svg {
       display: block;
@@ -136,14 +180,14 @@
     }
     .gauge-label {
       fill: #8fb6d4;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: bold;
       text-anchor: middle;
       dominant-baseline: central;
     }
     .gauge-value {
       fill: #ffe14d;
-      font-size: 10px;
+      font-size: 12px;
     }
     .att-horizon {
       stroke: #ffffff;
@@ -188,7 +232,7 @@
     }
     .alt-label {
       fill: #ffffff;
-      font-size: 8px;
+      font-size: 9px;
       dominant-baseline: central;
     }
     .alt-ground {
@@ -234,7 +278,7 @@
     }
     .thr-readout {
       fill: #ffe14d;
-      font-size: 9px;
+      font-size: 11px;
       font-weight: bold;
       text-anchor: middle;
       dominant-baseline: central;
@@ -260,7 +304,7 @@
     }
     .speedo-label {
       fill: #ffffff;
-      font-size: 9px;
+      font-size: 10px;
       text-anchor: middle;
       dominant-baseline: central;
     }
@@ -311,12 +355,22 @@
       }
       #cockpit {
         bottom: max(8px, env(safe-area-inset-bottom));
-        gap: 6px;
+        gap: 3px;
         padding: 4px 8px 2px;
         border-radius: 12px;
       }
       #cockpit svg {
-        height: 84px;
+        height: 100px;
+      }
+      .cockpit-gauges {
+        gap: 6px;
+      }
+      .cockpit-fuel-label,
+      .cockpit-fuel-value {
+        font-size: 11px;
+      }
+      .cockpit-fuel-track {
+        height: 11px;
       }
       #stage-badge {
         font-size: 13px;
@@ -553,7 +607,7 @@
     <div>ポイント: <span id="points">0</span></div>
     <div>風: <span id="wind">なし</span></div>
     <div class="no-flight">高度: <span id="altitude">0</span></div>
-    <div class="has-fuel fuel-row">燃料:
+    <div class="has-fuel no-flight fuel-row">燃料:
       <div id="fuel-gauge" role="meter" aria-label="燃料" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="fuel-bar"></div></div>
     </div>
     <div class="skydive-only">
@@ -564,10 +618,17 @@
     <div class="has-target">的まで: <span id="target">0</span></div>
   </div>
   <div id="cockpit" class="flight-only">
-    <div id="throttle-gauge" role="meter" aria-label="スロットル" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
-    <div id="speedometer" role="meter" aria-label="速度" aria-valuemin="0" aria-valuenow="0"></div>
-    <div id="attitude" role="img" aria-label="姿勢指示器"></div>
-    <div id="altimeter" role="meter" aria-label="高度" aria-valuemin="0" aria-valuenow="0"></div>
+    <div class="cockpit-fuel">
+      <span class="cockpit-fuel-label">燃料</span>
+      <div id="cockpit-fuel-gauge" class="cockpit-fuel-track" role="meter" aria-label="燃料" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="cockpit-fuel-bar"></div></div>
+      <span id="cockpit-fuel-value" class="cockpit-fuel-value">100%</span>
+    </div>
+    <div class="cockpit-gauges">
+      <div id="throttle-gauge" role="meter" aria-label="スロットル" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+      <div id="speedometer" role="meter" aria-label="速度" aria-valuemin="0" aria-valuenow="0"></div>
+      <div id="attitude" role="img" aria-label="姿勢指示器"></div>
+      <div id="altimeter" role="meter" aria-label="高度" aria-valuemin="0" aria-valuenow="0"></div>
+    </div>
   </div>
   <div id="touch-controls">
     <div id="stick"><div id="stick-knob"></div></div>

@@ -4,6 +4,8 @@ const toDeg = (rad: number): number => (rad * 180) / Math.PI;
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 const ATTITUDE_CENTER = 60;
+const ATTITUDE_WIDTH = 136;
+const ATTITUDE_OFFSET_X = (ATTITUDE_WIDTH - 120) / 2;
 const ATTITUDE_RADIUS = 50;
 const PX_PER_DEG = 1.4;
 const PITCH_LADDER_LIMIT = 30;
@@ -34,7 +36,8 @@ export class AttitudeIndicator {
 
   constructor(root: HTMLElement) {
     const c = ATTITUDE_CENTER;
-    const face = svg('svg', { viewBox: `0 0 120 ${GAUGE_HEIGHT}`, 'aria-hidden': 'true' });
+    const face = svg('svg', { viewBox: `0 0 ${ATTITUDE_WIDTH} ${GAUGE_HEIGHT}`, 'aria-hidden': 'true' });
+    const dial = svg('g', { transform: `translate(${ATTITUDE_OFFSET_X} 0)` });
     const defs = svg('defs');
     const clip = svg('clipPath', { id: 'attitude-clip' });
     clip.append(svg('circle', { cx: c, cy: c, r: ATTITUDE_RADIUS }));
@@ -79,12 +82,12 @@ export class AttitudeIndicator {
 
     this.pitchValue = svg('tspan', { class: 'gauge-value' });
     this.bankValue = svg('tspan', { class: 'gauge-value' });
-    const pitchText = svg('text', { x: 30, y: LABEL_Y, class: 'gauge-label' });
+    const pitchText = svg('text', { x: ATTITUDE_WIDTH / 4, y: LABEL_Y, class: 'gauge-label' });
     pitchText.append('ピッチ ', this.pitchValue);
-    const bankText = svg('text', { x: 90, y: LABEL_Y, class: 'gauge-label' });
+    const bankText = svg('text', { x: (ATTITUDE_WIDTH * 3) / 4, y: LABEL_Y, class: 'gauge-label' });
     bankText.append('ロール ', this.bankValue);
 
-    face.append(
+    dial.append(
       defs,
       svg('circle', { cx: c, cy: c, r: 57, class: 'gauge-bezel' }),
       card,
@@ -94,9 +97,8 @@ export class AttitudeIndicator {
       svg('path', { d: `M 28 ${c} H 47 L 53 ${c + 6} L ${c} ${c} L 67 ${c + 6} L 73 ${c} H 92`, class: 'att-aircraft' }),
       svg('circle', { cx: c, cy: c, r: 2.5, class: 'att-aircraft-dot' }),
       svg('circle', { cx: c, cy: c, r: ATTITUDE_RADIUS, class: 'att-rim' }),
-      pitchText,
-      bankText,
     );
+    face.append(dial, pitchText, bankText);
     root.append(face);
   }
 
@@ -185,19 +187,19 @@ export class ThrottleGauge {
   private readout: SVGElement;
 
   constructor(private root: HTMLElement) {
-    const face = svg('svg', { viewBox: `0 0 44 ${GAUGE_HEIGHT}`, 'aria-hidden': 'true' });
+    const face = svg('svg', { viewBox: `0 0 56 ${GAUGE_HEIGHT}`, 'aria-hidden': 'true' });
     const segmentHeight = (BAR_BOTTOM - BAR_TOP - 4 - SEGMENT_GAP * (SEGMENTS - 1)) / SEGMENTS;
-    face.append(svg('rect', { x: 9, y: BAR_TOP - 2, width: 26, height: BAR_BOTTOM - BAR_TOP + 2, rx: 4, class: 'gauge-panel' }));
+    face.append(svg('rect', { x: 15, y: BAR_TOP - 2, width: 26, height: BAR_BOTTOM - BAR_TOP + 2, rx: 4, class: 'gauge-panel' }));
     for (let i = 0; i < SEGMENTS; i++) {
       const ratio = (i + 1) / SEGMENTS;
       const level = ratio <= 0.6 ? 'low' : ratio <= 0.85 ? 'mid' : 'high';
       const y = BAR_BOTTOM - 2 - (i + 1) * segmentHeight - i * SEGMENT_GAP;
-      const segment = svg('rect', { x: 12, y, width: 20, height: segmentHeight, rx: 1.5, class: `thr-seg thr-${level}` });
+      const segment = svg('rect', { x: 18, y, width: 20, height: segmentHeight, rx: 1.5, class: `thr-seg thr-${level}` });
       this.segments.push(segment);
       face.append(segment);
     }
-    this.readout = svg('text', { x: 22, y: 9, class: 'thr-readout' });
-    face.append(this.readout, svgText('スロットル', { x: 22, y: LABEL_Y, class: 'gauge-label' }));
+    this.readout = svg('text', { x: 28, y: 9, class: 'thr-readout' });
+    face.append(this.readout, svgText('スロットル', { x: 28, y: LABEL_Y, class: 'gauge-label' }));
     root.append(face);
   }
 
