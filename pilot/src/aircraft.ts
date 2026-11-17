@@ -10,6 +10,7 @@ export class Aircraft {
   private shadow: THREE.Group;
   private shadowMaterial: THREE.MeshBasicMaterial;
   private velocity: THREE.Vector3;
+  private sinkSpeed = 0;
   private angularVelocity: THREE.Vector3;
   private throttle: number;
   private propellerSpin: number;
@@ -43,6 +44,10 @@ export class Aircraft {
   private readonly LIFT_COEFFICIENT = 0.25;  // 揚力をさらに弱く（降下しやすく）
   private readonly DRAG_COEFFICIENT = 0.1;
   private readonly GRAVITY = 6.0;  // 重力を弱く（ゆっくり降下）
+  private readonly STALL_SPEED = 8;
+  private readonly STALL_PITCH_RATE = 0.6;
+  private readonly MAX_STALL_PITCH = Math.PI / 3;
+  private readonly SINK_RECOVERY_RATE = 1.5;
 
   // 燃料パラメータ
   private readonly FUEL_CONSUMPTION_RATE = 1.2;  // 毎秒の消費率(%、約83秒で空)
@@ -244,6 +249,17 @@ export class Aircraft {
     this.shadowMaterial.opacity = 0.15 + 0.5 * closeness * closeness;
   }
 
+  private applyStall(airspeed: number, delta: number): void {
+    const liftRatio = Math.min(1, airspeed / this.STALL_SPEED);
+    const stall = 1 - liftRatio;
+    this.sinkSpeed += this.GRAVITY * stall * delta;
+    this.sinkSpeed *= Math.exp(-this.SINK_RECOVERY_RATE * liftRatio * delta);
+    this.velocity.y -= this.sinkSpeed;
+    if (stall > 0) {
+      this.mesh.rotation.x = Math.min(this.MAX_STALL_PITCH, this.mesh.rotation.x + this.STALL_PITCH_RATE * stall * delta);
+    }
+  }
+
   public update(delta: number, input: InputState): void {
     if (this.state === 'crashed' || this.state === 'stopped') {
       return;
@@ -304,7 +320,8 @@ export class Aircraft {
     this.mesh.rotation.z = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, this.mesh.rotation.z));
 
     // 推力計算（燃料がある場合のみ）
-    const currentSpeed = this.velocity.length();
+    // velocity は毎フレーム機首方向へ向け直すため、失速で落ちる分(sinkSpeed)を含めると落下が前進の速さに化けてしまう
+    const currentSpeed = Math.hypot(this.velocity.x, this.velocity.y + this.sinkSpeed, this.velocity.z);
     let acceleration = 0;
 
     if (hasFuel) {
@@ -329,6 +346,8 @@ export class Aircraft {
 
     // 抗力
     this.velocity.multiplyScalar(1 - this.DRAG_COEFFICIENT * delta);
+
+    this.applyStall(currentSpeed, delta);
 
     // 位置更新
     this.mesh.position.addScaledVector(this.velocity, delta).addScaledVector(this.wind, delta);
@@ -370,6 +389,7 @@ export class Aircraft {
         this.state = 'rolling';
         this.throttle = 0;
         this.velocity.y = 0;
+        this.sinkSpeed = 0;
         this.updateShadow();
         return;
       } else {
@@ -384,6 +404,7 @@ export class Aircraft {
         } else {
           // 中程度の衝突：バウンド
           this.velocity.y = -this.velocity.y * 0.3;
+          this.sinkSpeed = 0;
           this.velocity.x *= 0.7;
           this.velocity.z *= 0.7;
         }
