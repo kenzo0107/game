@@ -4,8 +4,10 @@ import {
     CEILING_Y,
     GROUND_Y,
     THEMES,
+    BOUNCE_SPEED,
     aimAt,
     bombHitsFort,
+    bounceStep,
     buildStage,
     canLand,
     clampPitch,
@@ -21,8 +23,8 @@ const LEVELS = [0, 1, 2, 3, 4, 9];
 
 test('滑走路・敵のきち・スタート地点の地面は平らで、標準の高さにある', () => {
     for (const level of LEVELS) {
-        const { target, runway } = stageLayout(level);
-        for (const x of [0, 200, target.x0, target.x1, runway.x0, (runway.x0 + runway.x1) / 2, runway.x1]) {
+        const { target, runway, base } = stageLayout(level);
+        for (const x of [0, base.x0, base.x1, target.x0, target.x1, runway.x0, (runway.x0 + runway.x1) / 2, runway.x1]) {
             assert.equal(groundY(level, x), GROUND_Y, `level ${level} x ${x}`);
         }
     }
@@ -47,6 +49,13 @@ test('ステージは きち の前に ばくだん補給があり、最後に�
         assert.ok(crates.length >= 1 && crates.every((c) => c.x < fort.x));
         assert.equal(stage.events.at(-1).type, 'runway');
         assert.ok(stage.events.some((e) => e.type === 'plane'));
+    }
+});
+
+test('ステージは最初の敵より手前に、離陸する滑走路がある', () => {
+    for (const level of LEVELS) {
+        const { base, events } = buildStage(level);
+        assert.ok(base.x0 < base.x1 && base.x1 < events[0].x);
     }
 });
 
@@ -108,4 +117,21 @@ test('宙返りは小さな円を描いて、始めた位置にぴったり戻�
     }
     const top = loopOffset(Math.PI, 0, 16);
     assert.ok(Math.abs(top.x) < 1e-9 && Math.abs(top.y + 32) < 1e-9);
+});
+
+test('着地すると小さく跳ねてから、地面の上で止まる', () => {
+    const floor = 158;
+    let body = { y: floor, vy: -BOUNCE_SPEED };
+    let top = floor;
+    let rebounds = 0;
+    for (let i = 0; i < 120; i++) {
+        const before = body.vy;
+        body = bounceStep(body, floor, 1 / 60);
+        top = Math.min(top, body.y);
+        if (before > 0 && body.vy < 0) rebounds++;
+        assert.ok(body.y <= floor);
+    }
+    assert.ok(floor - top > 2 && floor - top < 6, `跳ねた高さ ${floor - top}`);
+    assert.ok(rebounds >= 1);
+    assert.deepEqual(body, { y: floor, vy: 0 });
 });

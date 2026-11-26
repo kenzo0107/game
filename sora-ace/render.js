@@ -98,18 +98,29 @@ function drawGround(theme, level, cam) {
     }
 }
 
-function drawRunway(stage, cam) {
-    const { x0, x1 } = stage.runway;
-    const sx = x0 - cam;
-    if (sx > VIEW.w || x1 - cam < -40) return;
-    rect(sx, GROUND_Y - 1, x1 - x0, 4, '#5b5f66');
-    for (let x = x0 + 8; x < x1 - 8; x += 20) rect(x - cam, GROUND_Y, 10, 1, '#fff');
-    const hx = x1 - cam + 12;
+function drawHangar(hx) {
     rect(hx, GROUND_Y - 18, 34, 18, '#8a6d4a');
     rect(hx + 2, GROUND_Y - 22, 30, 4, '#b0412e');
     rect(hx + 10, GROUND_Y - 12, 14, 12, '#2c2c2c');
-    rect(sx - 10, GROUND_Y - 20, 1, 20, '#ddd');
-    rect(sx - 9, GROUND_Y - 20, 6, 3, '#ff7a2a');
+}
+
+function drawWindsock(sx) {
+    rect(sx, GROUND_Y - 20, 1, 20, '#ddd');
+    rect(sx + 1, GROUND_Y - 20, 6, 3, '#ff7a2a');
+}
+
+function drawAirfield({ x0, x1 }, cam, hangarAtStart) {
+    const sx = x0 - cam;
+    if (sx > VIEW.w + 50 || x1 - cam < -50) return;
+    rect(sx, GROUND_Y - 1, x1 - x0, 4, '#5b5f66');
+    for (let x = x0 + 8; x < x1 - 8; x += 20) rect(x - cam, GROUND_Y, 10, 1, '#fff');
+    if (hangarAtStart) {
+        drawHangar(sx - 44);
+        drawWindsock(x1 - cam + 6);
+    } else {
+        drawHangar(x1 - cam + 12);
+        drawWindsock(sx - 10);
+    }
 }
 
 function drawFort(fort, cam, t) {
@@ -168,7 +179,8 @@ export function render(state, canvas, ctx, view) {
     const theme = themeOf(level);
     drawSky(theme, cam, clock);
     drawGround(theme, level, cam);
-    drawRunway(stage, cam);
+    drawAirfield(stage.base, cam, true);
+    drawAirfield(stage.runway, cam, false);
     drawFort(state.fort, cam, clock);
     for (const gun of state.guns) drawGun(gun, cam, player);
     for (const c of state.crates) drawCrate(c, cam);

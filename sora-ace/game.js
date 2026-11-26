@@ -1,5 +1,6 @@
 import { createBgm } from './bgm.js';
 import {
+    BOUNCE_SPEED,
     CEILING_Y,
     GROUND_Y,
     HOME_X,
@@ -10,6 +11,7 @@ import {
     VIEW,
     aimAt,
     bombHitsFort,
+    bounceStep,
     buildStage,
     canLand,
     clampPitch,
@@ -36,7 +38,12 @@ const BOMB_GRAVITY = 90;
 const SPIN_GRAVITY = 55;
 const RESPAWN_SEC = 2;
 const INVULNERABLE_SEC = 2.5;
-const LANDED_SEC = 2.5;
+const LANDED_SEC = 3;
+const ROLLOUT_SPEED = 40;
+const ROLLOUT_BRAKE = 30;
+const TAKEOFF_ROLL_SEC = 1.2;
+const TAKEOFF_PITCH = 0.4;
+const LIFTOFF_HEIGHT = 40;
 const EXTEND_EVERY = 10000;
 const START_LIVES = 3;
 const END_WAIT_SEC = 6;
@@ -153,7 +160,12 @@ const SOUNDS = {
     pickup: () => [784, 988, 1319].forEach((f, i) => tone(f, 0.1, 'square', 0.06, i * 0.07)),
     rescue: () => [523, 784, 1047].forEach((f, i) => tone(f, 0.1, 'triangle', 0.15, i * 0.06)),
     tap: () => tone(600, 0.04, 'square', 0.04),
-    land: () => bugle([[72, 0.12], [72, 0.12], [72, 0.12], [76, 0.36], [72, 0.12], [76, 0.12], [79, 0.8]]),
+    thud: () => tone(140, 0.12, 'triangle', 0.2, 0, 60),
+    goal: () => {
+        [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.12, 'square', 0.05, i * 0.07));
+        [1047, 1319, 1568, 2093].forEach((f) => tone(f, 1.2, 'triangle', 0.07, 0.48));
+        [2637, 3136, 4186].forEach((f, i) => tone(f, 0.25, 'sine', 0.04, 0.6 + i * 0.12));
+    },
     fanfare: () => bugle(FANFARE),
     extend: () => [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.08, 'square', 0.05, i * 0.06)),
     over: () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.3, 'triangle', 0.15, i * 0.25)),
@@ -244,7 +256,9 @@ function startStage() {
     state.stage = buildStage(state.level);
     state.cam = 0;
     state.nextEvent = 0;
-    state.player = newPlayer(HOME_X, 70);
+    state.player = newPlayer(state.stage.base.x0 + 14, groundY(state.level, state.stage.base.x0) - 4);
+    state.player.mode = 'takeoff';
+    state.player.inv = 0;
     state.enemies = [];
     state.guns = [];
     state.crates = [];
@@ -349,15 +363,23 @@ function crash() {
     renderHud();
 }
 
+function goal() {
+    state.bgmAt = Infinity;
+    play('goal');
+}
+
 function land() {
     const p = state.player;
     p.mode = 'landed';
     p.a = 0;
     p.y = groundY(state.level, p.x) - 4;
+    p.vy = -BOUNCE_SPEED;
     p.t = 0;
     addScore(SCORES.landing, p.x, p.y - 12);
     state.banner = { text: 'ちゃくりく せいこう！', sub: `ボーナス ${SCORES.landing}`, t: 3 };
-    play('land');
+    play('thud');
+    vibrate(40);
+    goal();
 }
 
 function flightVelocity(p) {
@@ -391,10 +413,33 @@ function updatePlayer(dt) {
     }
 
     if (p.mode === 'landed') {
-        const airborne = p.y < groundY(state.level, p.x) - 5;
-        p.x += (airborne ? SCROLL + FORWARD_SPEED : Math.max(0, 40 - p.t * 30)) * dt;
-        if (airborne) p.a = levelOff(p.a, LEVEL_RATE, dt);
+        const falling = p.vy > 0;
+        Object.assign(p, bounceStep(p, groundY(state.level, p.x) - 4, dt));
+        if (falling && p.vy < 0) play('thud');
+        p.a = p.vy * 0.004;
+        p.x += Math.max(0, ROLLOUT_SPEED - p.t * ROLLOUT_BRAKE) * dt;
         if (p.t > LANDED_SEC) nextStage();
+        return;
+    }
+
+    if (p.mode === 'cleared') {
+        p.x += (SCROLL + FORWARD_SPEED) * dt;
+        p.a = levelOff(p.a, LEVEL_RATE, dt);
+        if (p.t > LANDED_SEC) nextStage();
+        return;
+    }
+
+    if (p.mode === 'takeoff') {
+        const rolling = p.t < TAKEOFF_ROLL_SEC;
+        if (!rolling) p.a = -TAKEOFF_PITCH + levelOff(p.a + TAKEOFF_PITCH, LEVEL_RATE, dt);
+        const { vx, vy } = flightVelocity(p);
+        const floor = groundY(state.level, p.x) - 4;
+        p.x += vx * Math.min(1, p.t / TAKEOFF_ROLL_SEC) * dt;
+        p.y = Math.min(floor, p.y + (rolling ? 0 : vy) * dt);
+        if (p.y <= floor - LIFTOFF_HEIGHT) {
+            p.mode = 'fly';
+            p.inv = INVULNERABLE_SEC;
+        }
         return;
     }
 
@@ -643,9 +688,10 @@ function updateEffects(dt) {
 }
 
 function passRunway() {
-    state.player.mode = 'landed';
+    state.player.mode = 'cleared';
     state.player.t = 0;
     state.banner = { text: 'ステージ クリア', sub: 'つぎは かっそうろに おりてみよう', t: 3 };
+    goal();
 }
 
 function nextStage() {
@@ -670,7 +716,7 @@ function update(dt) {
     if (state.phase !== 'play') return;
     const p = state.player;
     const camEnd = state.stage.length - VIEW.w;
-    if (p.mode !== 'landed') state.cam = Math.min(state.cam + SCROLL * dt, camEnd);
+    if (p.mode !== 'landed' && p.mode !== 'cleared') state.cam = Math.min(state.cam + SCROLL * dt, camEnd);
     state.phaseT = state.cam >= camEnd ? state.phaseT + dt : 0;
     if (state.phaseT > END_WAIT_SEC && p.mode === 'fly') passRunway();
     spawnEvents();

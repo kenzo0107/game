@@ -54,12 +54,14 @@ export function mulberry32(seed) {
 
 export const themeOf = (level) => THEMES[level % THEMES.length];
 
+export const BASE = { x0: 50, x1: 270 };
+
 export function stageLayout(level) {
     const step = Math.min(level, MAX_LEVEL_STEP);
     const length = 2600 + step * 250;
     const target = { x0: length - 780, x1: length - 660 };
     const runway = { x0: length - 420, x1: length - 150 };
-    return { length, target, runway };
+    return { length, target, runway, base: BASE };
 }
 
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -79,14 +81,14 @@ export function groundY(level, x) {
     const { target, runway } = stageLayout(level);
     const p = level * 1.7;
     const hill = Math.max(0, 16 * Math.sin(x / 110 + p) + 9 * Math.sin(x / 43 + p * 2.3) + 4);
-    const flat = flatness(x, [{ x0: -400, x1: 220 }, target, runway]);
+    const flat = flatness(x, [{ x0: -400, x1: BASE.x1 }, target, runway]);
     return GROUND_Y - hill * (1 - flat);
 }
 
 export function buildStage(level) {
     const rand = mulberry32(level * 7919 + 17);
     const step = Math.min(level, MAX_LEVEL_STEP);
-    const { length, target, runway } = stageLayout(level);
+    const { length, target, runway, base } = stageLayout(level);
     const events = [];
 
     const gap = 150 - step * 18;
@@ -104,7 +106,7 @@ export function buildStage(level) {
     events.push({ type: 'fort', x: (target.x0 + target.x1) / 2 });
     events.push({ type: 'runway', x: runway.x0 });
 
-    return { length, target, runway, events: events.sort((a, b) => a.x - b.x) };
+    return { length, target, runway, base, events: events.sort((a, b) => a.x - b.x) };
 }
 
 export function normalizeAngle(a) {
@@ -143,6 +145,18 @@ export const hits = (a, b, r) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 <= r * r;
 export function canLand(angle) {
     const a = normalizeAngle(angle);
     return Math.cos(a) > 0 && Math.sin(a) < 0.5 && Math.sin(a) > -0.2;
+}
+
+export const LANDING_GRAVITY = 240;
+export const BOUNCE_SPEED = 40;
+const BOUNCE_KEEP = 0.35;
+const REST_SPEED = 12;
+
+export function bounceStep({ y, vy }, floor, dt) {
+    const fallen = { y: y + (vy + LANDING_GRAVITY * dt) * dt, vy: vy + LANDING_GRAVITY * dt };
+    if (fallen.y < floor) return fallen;
+    const rebound = fallen.vy * BOUNCE_KEEP;
+    return { y: floor, vy: rebound < REST_SPEED ? 0 : -rebound };
 }
 
 export function bombHitsFort(bomb, fortX) {
