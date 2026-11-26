@@ -12,9 +12,11 @@ import {
     bombHitsFort,
     buildStage,
     canLand,
+    clampPitch,
     groundY,
     hits,
     levelOff,
+    loopOffset,
     normalizeAngle,
     themeOf,
 } from './logic.js';
@@ -25,7 +27,8 @@ const LEVEL_RATE = 1.6;
 const CLIMB_SPEED = 70;
 const FORWARD_SPEED = 30;
 const HOME_PULL = 0.6;
-const LOOP_SEC = 0.6;
+const LOOP_SEC = 0.4;
+const LOOP_RADIUS = 16;
 const SHOT_SPEED = 190;
 const SHOT_SEC = 0.13;
 const MAX_SHOTS = 5;
@@ -415,32 +418,39 @@ function updatePlayer(dt) {
         return;
     }
 
-    if (p.mode === 'loop') {
-        p.loopT += dt;
-        p.a = p.loopStart - (Math.PI * 2 * p.loopT) / LOOP_SEC;
-        if (p.loopT >= LOOP_SEC) {
-            p.mode = 'fly';
-            p.a = normalizeAngle(p.loopStart);
-        }
-    } else if (held.up && !held.down) {
-        p.a -= PITCH_RATE * dt;
-    } else if (held.down && !held.up) {
-        p.a += PITCH_RATE * dt;
-    } else {
-        const target = approaching(p) ? GLIDE_ANGLE : 0;
-        p.a = target + levelOff(p.a - target, LEVEL_RATE, dt);
-    }
-    p.a = p.mode === 'loop' ? p.a : normalizeAngle(p.a);
-
     if (pressed.has('loop') && p.mode === 'fly') {
         p.mode = 'loop';
         p.loopT = 0;
         p.loopStart = p.a;
+        p.loopOrigin = { sx: screenX(p.x), y: p.y };
+    }
+
+    if (p.mode === 'loop') {
+        p.loopT = Math.min(p.loopT + dt, LOOP_SEC);
+        const turned = (Math.PI * 2 * p.loopT) / LOOP_SEC;
+        const offset = loopOffset(turned, p.loopStart, LOOP_RADIUS);
+        p.a = p.loopStart - turned;
+        p.x = state.cam + p.loopOrigin.sx + offset.x;
+        p.y = Math.max(CEILING_Y, p.loopOrigin.y + offset.y);
+        if (p.loopT >= LOOP_SEC) {
+            p.mode = 'fly';
+            p.a = p.loopStart;
+        }
+    } else {
+        if (held.up && !held.down) p.a -= PITCH_RATE * dt;
+        else if (held.down && !held.up) p.a += PITCH_RATE * dt;
+        else {
+            const target = approaching(p) ? GLIDE_ANGLE : 0;
+            p.a = target + levelOff(p.a - target, LEVEL_RATE, dt);
+        }
+        p.a = clampPitch(p.a);
     }
 
     const { vx, vy } = flightVelocity(p);
-    p.x += vx * dt;
-    p.y = Math.max(CEILING_Y, p.y + vy * dt);
+    if (p.mode === 'fly') {
+        p.x += vx * dt;
+        p.y = Math.max(CEILING_Y, p.y + vy * dt);
+    }
     p.x = Math.max(state.cam + 12, p.x);
 
     if (held.fire && p.fireCD <= 0 && state.shots.length < MAX_SHOTS) {

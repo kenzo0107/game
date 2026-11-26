@@ -118,6 +118,19 @@ export function levelOff(angle, rate, dt) {
     return Math.abs(a) <= stepSize ? 0 : a - Math.sign(a) * stepSize;
 }
 
+export const MAX_PITCH = Math.PI / 4;
+
+export const clampPitch = (a) => Math.max(-MAX_PITCH, Math.min(MAX_PITCH, normalizeAngle(a)));
+
+export function loopOffset(turned, start, radius) {
+    const ox = radius * Math.sin(turned);
+    const oy = -radius * (1 - Math.cos(turned));
+    return {
+        x: ox * Math.cos(start) - oy * Math.sin(start),
+        y: ox * Math.sin(start) + oy * Math.cos(start),
+    };
+}
+
 export function aimAt(from, to, speed) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;

@@ -8,6 +8,9 @@ import {
     bombHitsFort,
     buildStage,
     canLand,
+    clampPitch,
+    loopOffset,
+    MAX_PITCH,
     groundY,
     levelOff,
     normalizeAngle,
@@ -85,4 +88,24 @@ test('水平かゆるい降下なら着陸でき、急降下・宙返り中・�
 test('ばくだんは きち の幅の中に落ちたときだけ命中する', () => {
     assert.ok(bombHitsFort({ x: 1000 }, 1010));
     assert.ok(!bombHitsFort({ x: 1000 }, 1060));
+});
+
+test('上下の操作で機首が向くのは水平から45度まで', () => {
+    assert.equal(MAX_PITCH, Math.PI / 4);
+    assert.equal(clampPitch(-1.2), -MAX_PITCH);
+    assert.equal(clampPitch(1.2), MAX_PITCH);
+    assert.ok(Math.abs(clampPitch(0.3) - 0.3) < 1e-9);
+});
+
+test('宙返りは小さな円を描いて、始めた位置にぴったり戻る', () => {
+    for (const start of [0, -MAX_PITCH, MAX_PITCH]) {
+        const end = loopOffset(Math.PI * 2, start, 16);
+        assert.ok(Math.hypot(end.x, end.y) < 1e-9);
+        for (let turned = 0; turned <= Math.PI * 2; turned += 0.1) {
+            const o = loopOffset(turned, start, 16);
+            assert.ok(Math.hypot(o.x, o.y) <= 32 + 1e-9);
+        }
+    }
+    const top = loopOffset(Math.PI, 0, 16);
+    assert.ok(Math.abs(top.x) < 1e-9 && Math.abs(top.y + 32) < 1e-9);
 });
