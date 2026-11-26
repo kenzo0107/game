@@ -5,36 +5,55 @@ off.width = VIEW.w;
 off.height = VIEW.h;
 const g = off.getContext('2d');
 
-const PLAYER_COLORS = { body: '#ffd23f', wing: '#fff4c2', trim: '#2a6fdb', pilot: '#7a3b1a' };
-const ENEMY_COLORS = { body: '#6b5a8e', wing: '#9a8bbd', trim: '#2b2140', pilot: '#222' };
-const CHASER_COLORS = { body: '#3f7a6b', wing: '#7fb8a6', trim: '#173a31', pilot: '#222' };
+const PLAYER_COLORS = { body: '#ffd23f', wing: '#fff4c2', trim: '#2a6fdb' };
+const ENEMY_COLORS = { body: '#6b5a8e', wing: '#9a8bbd', trim: '#2b2140' };
+const CHASER_COLORS = { body: '#3f7a6b', wing: '#7fb8a6', trim: '#173a31' };
+
+export const HERO = { face: '#ffffff', helmet: '#8a4b22', beak: '#ff9a2e', eye: '#111', cheek: '#ff9db0', scarf: '#e8453c' };
+const CROW = { face: '#2b2b33', helmet: '#55505e', beak: '#3a3a3a', eye: '#ffd23f', scarf: '#9b3fd1' };
+const OWL = { face: '#a8743f', helmet: '#4e3a2a', beak: '#ffcf3a', eye: '#ffd23f', cheek: '#e8c79a', scarf: '#2f8f6b' };
 
 const rect = (x, y, w, h, c) => {
     g.fillStyle = c;
     g.fillRect(Math.round(x), Math.round(y), w, h);
 };
 
-export function drawPlane(x, y, angle, colors, t, flip = false) {
+export function drawPilot(c, pilot, t) {
+    const px = (x, y, w, h, color) => {
+        c.fillStyle = color;
+        c.fillRect(x, y, w, h);
+    };
+    const flutter = Math.floor(t * 10) % 2;
+    px(-9, -3, 3, 1, pilot.scarf);
+    px(-12, -3 - flutter, 3, 1, pilot.scarf);
+    px(-6, -7, 5, 4, pilot.face);
+    if (pilot.cheek) px(-5, -5, 1, 1, pilot.cheek);
+    px(-3, -6, 1, 1, pilot.eye);
+    px(-1, -5, 2, 1, pilot.beak);
+    px(-6, -9, 5, 2, pilot.helmet);
+    px(-7, -8, 1, 4, pilot.helmet);
+    px(-4, -9, 3, 1, '#8fe3ff');
+}
+
+export function drawPlane(x, y, angle, colors, pilot, t, flip = false) {
     g.save();
     g.translate(Math.round(x), Math.round(y));
     g.rotate(angle);
     if (flip) g.scale(1, -1);
-    g.fillStyle = colors.wing;
-    g.fillRect(-4, -6, 10, 2);
-    g.fillRect(-3, 2, 9, 2);
-    g.fillStyle = colors.trim;
-    g.fillRect(-1, -4, 1, 6);
-    g.fillRect(4, -4, 1, 6);
     g.fillStyle = colors.body;
-    g.fillRect(-8, -2, 15, 4);
-    g.fillRect(-9, -5, 3, 4);
+    g.fillRect(-10, -2, 18, 4);
+    g.fillRect(-11, -5, 3, 4);
+    drawPilot(g, pilot, t);
+    g.fillStyle = colors.wing;
+    g.fillRect(-1, -7, 10, 2);
+    g.fillRect(0, 2, 9, 2);
     g.fillStyle = colors.trim;
-    g.fillRect(-6, -1, 10, 1);
-    g.fillStyle = colors.pilot;
-    g.fillRect(0, -4, 2, 2);
+    g.fillRect(0, -5, 1, 7);
+    g.fillRect(7, -5, 1, 7);
+    g.fillRect(-8, -1, 12, 1);
     g.fillStyle = '#ddd';
     const blade = Math.floor(t * 30) % 2 ? 3 : 6;
-    g.fillRect(7, -blade / 2, 1, blade);
+    g.fillRect(8, -blade / 2, 1, blade);
     g.restore();
 }
 
@@ -155,8 +174,8 @@ export function render(state, canvas, ctx, view) {
     for (const c of state.crates) drawCrate(c, cam);
     for (const e of state.enemies) {
         const colors = e.kind === 'chaser' ? CHASER_COLORS : ENEMY_COLORS;
-        if (e.kind === 'chaser') drawPlane(e.x - cam, e.y, 0, colors, clock);
-        else drawPlane(e.x - cam, e.y, Math.PI, colors, clock, true);
+        if (e.kind === 'chaser') drawPlane(e.x - cam, e.y, 0, colors, OWL, clock);
+        else drawPlane(e.x - cam, e.y, Math.PI, colors, CROW, clock, true);
     }
     for (const s of state.shots) rect(s.x - cam - 1, s.y - 1, 3, 2, '#fff36b');
     for (const s of state.eshots) rect(s.x - cam - 1, s.y - 1, 3, 3, Math.floor(clock * 12) % 2 ? '#ff5a3c' : '#fff');
@@ -167,7 +186,7 @@ export function render(state, canvas, ctx, view) {
     const p = player;
     const visible = p.mode !== 'down' && !(p.inv > 0 && Math.floor(clock * 12) % 2);
     if (visible) {
-        drawPlane(p.x - cam, p.y, p.a, PLAYER_COLORS, clock);
+        drawPlane(p.x - cam, p.y, p.a, PLAYER_COLORS, HERO, clock);
         if (p.hasBomb) rect(p.x - cam - 2, p.y + 5, 4, 3, '#222');
     }
     for (const q of state.particles) rect(q.x - cam, q.y, q.size, q.size, q.color);

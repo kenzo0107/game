@@ -20,7 +20,7 @@ import {
     normalizeAngle,
     themeOf,
 } from './logic.js';
-import { render } from './render.js';
+import { HERO, drawPilot, render } from './render.js';
 
 const PITCH_RATE = 4.5;
 const LEVEL_RATE = 1.6;
@@ -49,6 +49,9 @@ const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayText = document.getElementById('overlay-text');
+const heroFace = document.getElementById('hero-face').getContext('2d');
+heroFace.translate(13, 11);
+drawPilot(heroFace, HERO, 0);
 const startButton = document.getElementById('start');
 const soundButton = document.getElementById('sound');
 const scoreEl = document.getElementById('score');
