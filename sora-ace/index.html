@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#14204a">
+    <title>そらのエース</title>
+    <script src="../shared/landscape.js"></script>
+    <script src="../shared/audio-session.js"></script>
+    <script src="../shared/no-zoom.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="stage"></canvas>
+
+    <div class="hud">
+        <div><span class="label">SCORE</span><b id="score">0</b></div>
+        <div><span class="label">HI</span><b id="hi">0</b></div>
+        <div><span class="label">STAGE</span><b id="stage-no">1</b></div>
+        <div><b id="lives" class="lives" aria-label="のこり"></b></div>
+        <div id="bomb-box" hidden><b class="bomb">● ばくだん</b></div>
+        <button type="button" id="sound" aria-pressed="true" aria-label="効果音">♪</button>
+    </div>
+
+    <div class="pad" id="pad">
+        <div class="pad-left">
+            <button type="button" data-key="up" aria-label="うえ">▲</button>
+            <button type="button" data-key="down" aria-label="した">▼</button>
+        </div>
+        <div class="pad-right">
+            <button type="button" data-key="bomb" id="bomb-button" class="bomb-button" aria-disabled="true">ばくだん</button>
+            <button type="button" data-key="loop" class="loop-button">ちゅう<br>がえり</button>
+            <button type="button" data-key="fire" class="fire-button">うつ</button>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+        <div class="panel">
+            <h1 id="overlay-title">そらのエース</h1>
+            <p id="overlay-text">
+                ふたばの ひこうきで てきの きちへ！<br>
+                とちゅうの パラシュートで ばくだんを もらって きちに おとそう。<br>
+                さいごは かっそうろに ちゃくりく！
+            </p>
+            <p class="keys only-touch">ひだりの ▲▼ で そうじゅう ／ みぎの「うつ」で こうげき<br>「ちゅうがえり」の あいだは たまに あたらない</p>
+            <p class="keys only-key">↑↓ そうじゅう ／ Z・スペース うつ ／ X ちゅうがえり ／ C ばくだん</p>
+            <button type="button" id="start">スタート</button>
+        </div>
+    </div>
+
+    <script type="module" src="game.js"></script>
+</body>
+</html>

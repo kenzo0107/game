@@ -1,0 +1,234 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #14204a;
+    --panel: rgba(12, 20, 52, 0.92);
+    --edge: #ffcf3a;
+    --text: #fffbea;
+    --muted: #b9c4ee;
+    --accent: #ff5a3c;
+    --yellow: #ffd23f;
+}
+
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+body {
+    font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#stage {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+}
+
+.hud {
+    position: fixed;
+    top: max(8px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    pointer-events: none;
+    text-shadow: 2px 2px 0 #000;
+}
+
+.hud .label {
+    margin-right: 6px;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+}
+
+.hud b {
+    font-size: 1.3rem;
+    color: var(--yellow);
+    font-variant-numeric: tabular-nums;
+}
+
+.hud .lives {
+    color: #fff;
+    letter-spacing: 0.1em;
+}
+
+.hud .bomb {
+    font-size: 1rem;
+    color: var(--accent);
+}
+
+.hud [hidden] {
+    display: none;
+}
+
+button {
+    font: inherit;
+    font-weight: bold;
+    color: var(--text);
+    cursor: pointer;
+}
+
+#sound {
+    margin-left: auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--edge);
+    background: var(--panel);
+    pointer-events: auto;
+}
+
+#sound[aria-pressed='false'] {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.pad {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .pad {
+        position: fixed;
+        left: max(6px, env(safe-area-inset-left));
+        right: max(6px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        pointer-events: none;
+    }
+
+    .pad.off {
+        display: none;
+    }
+}
+
+.pad-left,
+.pad-right {
+    display: flex;
+    gap: 12px;
+    pointer-events: auto;
+}
+
+.pad-left,
+.pad-right {
+    flex-direction: column;
+    align-items: center;
+}
+
+.pad button {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.7);
+    background: rgba(10, 16, 40, 0.45);
+    font-size: 1.6rem;
+    touch-action: none;
+}
+
+.pad .fire-button,
+.pad .loop-button,
+.pad .bomb-button {
+    font-size: 0.85rem;
+}
+
+.pad .loop-button {
+    line-height: 1.2;
+}
+
+.pad .fire-button {
+    width: 80px;
+    height: 80px;
+    font-size: 1.1rem;
+    background: rgba(255, 90, 60, 0.55);
+}
+
+.pad .bomb-button[aria-disabled='true'] {
+    opacity: 0.3;
+}
+
+.pad button.held {
+    background: rgba(255, 210, 63, 0.7);
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(5, 10, 30, 0.55);
+}
+
+.overlay[hidden] {
+    display: none;
+}
+
+.panel {
+    width: min(92vw, 560px);
+    max-height: 92vh;
+    overflow: auto;
+    padding: 20px 24px;
+    border: 4px solid var(--edge);
+    border-radius: 6px;
+    background: var(--panel);
+    text-align: center;
+}
+
+.panel h1 {
+    font-size: 2rem;
+    color: var(--yellow);
+    letter-spacing: 0.1em;
+    text-shadow: 3px 3px 0 #b5361d;
+}
+
+.panel p {
+    margin-top: 10px;
+    line-height: 1.6;
+}
+
+.only-touch {
+    display: none;
+}
+
+@media (pointer: coarse) {
+    .only-touch {
+        display: block;
+    }
+
+    .only-key {
+        display: none;
+    }
+}
+
+.panel .keys {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+#start {
+    margin-top: 16px;
+    padding: 12px 40px;
+    border: 3px solid var(--edge);
+    border-radius: 6px;
+    background: var(--accent);
+    font-size: 1.3rem;
+}
