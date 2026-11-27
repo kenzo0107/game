@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#123a3a">
+    <title>スライムポップ</title>
+    <script src="../shared/audio-session.js"></script>
+    <script src="../shared/no-zoom.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="hud" id="hud">
+        <div><span class="label">SCORE</span><b id="score">0</b></div>
+        <div><span class="label">HI</span><b id="hi">0</b></div>
+        <div><span class="label">さいだい れんさ</span><b id="best-chain">0</b></div>
+        <button type="button" id="pause" class="icon" aria-label="いちじていし">⏸</button>
+        <button type="button" id="sound" class="icon" aria-pressed="true" aria-label="おと">♪</button>
+    </header>
+
+    <main class="play" id="play">
+        <div class="well">
+            <canvas id="board"></canvas>
+            <div class="toast" id="toast" aria-live="polite"></div>
+        </div>
+        <aside class="side">
+            <span class="label">つぎ</span>
+            <canvas id="next" class="mini"></canvas>
+            <span class="label">レベル</span>
+            <b id="level" class="level">1</b>
+        </aside>
+    </main>
+
+    <div class="pad" id="pad">
+        <button type="button" data-action="ccw" class="turn" aria-label="ひだりに まわす">↺</button>
+        <button type="button" data-action="cw" class="turn" aria-label="みぎに まわす">↻</button>
+        <button type="button" data-action="drop" class="drop">いっきに</button>
+    </div>
+
+    <div class="overlay" id="overlay">
+        <div class="panel">
+            <h1 id="overlay-title">スライムポップ</h1>
+            <p id="overlay-text">
+                ふたつ ずつ おちてくる スライムを ならべよう。<br>
+                おなじ いろが <b>4つ</b> つながると ポン！<br>
+                つぎつぎ きえると <b>れんさ</b> だよ！
+            </p>
+            <ul class="gestures only-touch">
+                <li><b>よこに なぞる</b> いどう</li>
+                <li><b>タップ</b> まわす</li>
+                <li><b>したに なぞる</b> はやく おとす</li>
+                <li><b>したに はじく</b> いっきに おとす</li>
+            </ul>
+            <p class="keys only-key">←→ いどう ／ ↓ はやく ／ ↑・X まわす ／ Z ぎゃくに まわす ／ スペース いっきに ／ P ていし</p>
+            <div class="modes" id="modes">
+                <button type="button" data-colors="3">やさしい<small>3いろ</small></button>
+                <button type="button" data-colors="4" class="primary">ふつう<small>4いろ</small></button>
+                <button type="button" data-colors="5">むずかしい<small>5いろ</small></button>
+            </div>
+            <button type="button" id="resume" hidden>つづける</button>
+        </div>
+    </div>
+
+    <script type="module" src="game.js"></script>
+</body>
+</html>
