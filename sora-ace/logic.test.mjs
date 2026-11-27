@@ -14,7 +14,11 @@ import {
     loopOffset,
     MAX_PITCH,
     groundY,
+    HOME_MAX,
+    HOME_MIN,
     levelOff,
+    shiftHome,
+    stickVector,
     normalizeAngle,
     stageLayout,
 } from './logic.js';
@@ -134,4 +138,34 @@ test('着地すると小さく跳ねてから、地面の上で止まる', () =>
     assert.ok(floor - top > 2 && floor - top < 6, `跳ねた高さ ${floor - top}`);
     assert.ok(rebounds >= 1);
     assert.deepEqual(body, { y: floor, vy: 0 });
+});
+
+test('スティックは中心付近の小さなずれを無視する', () => {
+    assert.deepEqual(stickVector(5, -5, 60), { x: 0, y: 0 });
+});
+
+test('スティックは方向を保ったまま、端で長さ1になり、外へ引いても1を超えない', () => {
+    const edge = stickVector(0, -60, 60);
+    assert.ok(Math.abs(edge.x) < 1e-9 && Math.abs(edge.y + 1) < 1e-9);
+    const far = stickVector(300, 300, 60);
+    assert.ok(Math.abs(Math.hypot(far.x, far.y) - 1) < 1e-9);
+    assert.ok(Math.abs(far.x - far.y) < 1e-9);
+});
+
+test('スティックを上から下へ滑らせると、そのまま下向きの入力になる', () => {
+    assert.ok(stickVector(0, -50, 60).y < 0);
+    assert.ok(stickVector(0, 50, 60).y > 0);
+});
+
+test('左右の入力で自機の位置が画面の中を前後し、端で止まる', () => {
+    assert.ok(shiftHome(80, 1, 90, 0.1) > 80);
+    assert.ok(shiftHome(80, -1, 90, 0.1) < 80);
+    assert.equal(shiftHome(HOME_MAX, 1, 90, 1), HOME_MAX);
+    assert.equal(shiftHome(HOME_MIN, -1, 90, 1), HOME_MIN);
+});
+
+test('スティックを真横近くに倒したときは、縦の入力にならない', () => {
+    const v = stickVector(60, 6, 60);
+    assert.equal(v.y, 0);
+    assert.ok(v.x > 0.9);
 });

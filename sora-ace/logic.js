@@ -124,6 +124,23 @@ export const MAX_PITCH = Math.PI / 4;
 
 export const clampPitch = (a) => Math.max(-MAX_PITCH, Math.min(MAX_PITCH, normalizeAngle(a)));
 
+export const STICK_DEADZONE = 0.2;
+export const AXIS_DEADZONE = 0.25;
+
+const snapAxis = (v) => (Math.abs(v) < AXIS_DEADZONE ? 0 : v);
+
+export function stickVector(dx, dy, radius) {
+    const len = Math.hypot(dx, dy) / radius;
+    if (len < STICK_DEADZONE) return { x: 0, y: 0 };
+    const scale = Math.min(1, (len - STICK_DEADZONE) / (1 - STICK_DEADZONE)) / len / radius;
+    return { x: snapAxis(dx * scale), y: snapAxis(dy * scale) };
+}
+
+export const HOME_MIN = 40;
+export const HOME_MAX = 200;
+
+export const shiftHome = (home, x, speed, dt) => Math.max(HOME_MIN, Math.min(HOME_MAX, home + x * speed * dt));
+
 export function loopOffset(turned, start, radius) {
     const ox = radius * Math.sin(turned);
     const oy = -radius * (1 - Math.cos(turned));

@@ -166,6 +166,29 @@ button {
     opacity: 0.3;
 }
 
+.stick {
+    position: relative;
+    width: 132px;
+    height: 132px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.7);
+    background: radial-gradient(circle, rgba(10, 16, 40, 0.25) 30%, rgba(10, 16, 40, 0.5));
+    touch-action: none;
+}
+
+.stick-knob {
+    position: absolute;
+    inset: 33px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.35);
+    pointer-events: none;
+}
+
+.stick.held .stick-knob {
+    background: rgba(255, 210, 63, 0.7);
+}
+
 .pad button.held {
     background: rgba(255, 210, 63, 0.7);
 }

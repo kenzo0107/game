@@ -4,6 +4,7 @@ import {
     CEILING_Y,
     GROUND_Y,
     HOME_X,
+    MAX_PITCH,
     MAX_LEVEL_STEP,
     RESCUE_TAPS,
     SCORES,
@@ -20,6 +21,8 @@ import {
     levelOff,
     loopOffset,
     normalizeAngle,
+    shiftHome,
+    stickVector,
     themeOf,
 } from './logic.js';
 import { HERO, drawPilot, render } from './render.js';
@@ -28,6 +31,7 @@ const PITCH_RATE = 4.5;
 const LEVEL_RATE = 1.6;
 const CLIMB_SPEED = 70;
 const FORWARD_SPEED = 30;
+const HOME_SHIFT = 90;
 const HOME_PULL = 0.6;
 const LOOP_SEC = 0.4;
 const LOOP_RADIUS = 16;
@@ -68,6 +72,8 @@ const livesEl = document.getElementById('lives');
 const bombBox = document.getElementById('bomb-box');
 const bombButton = document.getElementById('bomb-button');
 const pad = document.getElementById('pad');
+const stick = document.getElementById('stick');
+const stickKnob = stick.querySelector('.stick-knob');
 
 const view = { s: 1, ox: 0, oy: 0 };
 const rand = (min, max) => min + Math.random() * (max - min);
@@ -192,7 +198,7 @@ function syncBgm() {
     else bgm.stop();
 }
 
-const held = { up: false, down: false, fire: false, loop: false, bomb: false };
+const held = { up: false, down: false, left: false, right: false, fire: false, loop: false, bomb: false };
 const pressed = new Set();
 
 function press(key) {
@@ -209,6 +215,10 @@ const KEYS = {
     KeyW: 'up',
     ArrowDown: 'down',
     KeyS: 'down',
+    ArrowLeft: 'left',
+    KeyA: 'left',
+    ArrowRight: 'right',
+    KeyD: 'right',
     KeyZ: 'fire',
     Space: 'fire',
     KeyX: 'loop',
@@ -248,8 +258,54 @@ for (const button of pad.querySelectorAll('[data-key]')) {
     button.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
+let stickPointer = null;
+const stickInput = { x: 0, y: 0 };
+
+function moveStick(e) {
+    const rect = stick.getBoundingClientRect();
+    const radius = rect.width / 2;
+    const dx = e.clientX - (rect.left + radius);
+    const dy = e.clientY - (rect.top + radius);
+    const wasNeutral = stickInput.x === 0 && stickInput.y === 0;
+    Object.assign(stickInput, stickVector(dx, dy, radius));
+    if (wasNeutral && (stickInput.x !== 0 || stickInput.y !== 0)) pressed.add('stick');
+    const distance = Math.hypot(dx, dy);
+    const k = Math.min(distance, radius * 0.6) / (distance || 1);
+    stickKnob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+}
+
+function releaseStick() {
+    stickPointer = null;
+    Object.assign(stickInput, { x: 0, y: 0 });
+    stickKnob.style.transform = '';
+    stick.classList.remove('held');
+}
+
+stick.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (stickPointer !== null) return;
+    stickPointer = e.pointerId;
+    stick.setPointerCapture(e.pointerId);
+    stick.classList.add('held');
+    moveStick(e);
+});
+stick.addEventListener('pointermove', (e) => {
+    if (e.pointerId === stickPointer) moveStick(e);
+});
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    stick.addEventListener(type, (e) => {
+        if (e.pointerId === stickPointer) releaseStick();
+    });
+}
+window.addEventListener('blur', releaseStick);
+
+function steerInput() {
+    if (stickPointer !== null) return stickInput;
+    return { x: Number(held.right) - Number(held.left), y: Number(held.down) - Number(held.up) };
+}
+
 function newPlayer(x, y) {
-    return { x, y, a: 0, mode: 'fly', loopT: 0, loopStart: 0, vy: 0, rescue: 0, inv: INVULNERABLE_SEC, fireCD: 0, hasBomb: false, t: 0 };
+    return { x, y, a: 0, home: HOME_X, mode: 'fly', loopT: 0, loopStart: 0, vy: 0, rescue: 0, inv: INVULNERABLE_SEC, fireCD: 0, hasBomb: false, t: 0 };
 }
 
 function startStage() {
@@ -286,6 +342,7 @@ function startGame() {
     state.lives = START_LIVES;
     state.nextExtend = EXTEND_EVERY;
     overlay.hidden = true;
+    releaseStick();
     pad.classList.remove('off');
     startStage();
 }
@@ -383,7 +440,7 @@ function land() {
 }
 
 function flightVelocity(p) {
-    const vx = SCROLL + (HOME_X - screenX(p.x)) * HOME_PULL + Math.cos(p.a) * FORWARD_SPEED;
+    const vx = SCROLL + (p.home - screenX(p.x)) * HOME_PULL + Math.cos(p.a) * FORWARD_SPEED;
     return { vx, vy: Math.sin(p.a) * CLIMB_SPEED };
 }
 
@@ -444,7 +501,7 @@ function updatePlayer(dt) {
     }
 
     if (p.mode === 'spin') {
-        for (const key of ['fire', 'loop', 'up', 'down']) {
+        for (const key of ['fire', 'loop', 'up', 'down', 'left', 'right', 'stick']) {
             if (!pressed.has(key)) continue;
             p.rescue++;
             play('tap');
@@ -485,13 +542,10 @@ function updatePlayer(dt) {
             p.a = p.loopStart;
         }
     } else {
-        if (held.up && !held.down) p.a -= PITCH_RATE * dt;
-        else if (held.down && !held.up) p.a += PITCH_RATE * dt;
-        else {
-            const target = approaching(p) ? GLIDE_ANGLE : 0;
-            p.a = target + levelOff(p.a - target, LEVEL_RATE, dt);
-        }
-        p.a = clampPitch(p.a);
+        const input = steerInput();
+        const target = input.y !== 0 ? input.y * MAX_PITCH : approaching(p) ? GLIDE_ANGLE : 0;
+        p.a = clampPitch(target + levelOff(p.a - target, input.y !== 0 ? PITCH_RATE : LEVEL_RATE, dt));
+        p.home = shiftHome(p.home, input.x, HOME_SHIFT, dt);
     }
 
     const { vx, vy } = flightVelocity(p);
@@ -703,6 +757,7 @@ function gameOver() {
     state.phase = 'over';
     syncBgm();
     play('over');
+    releaseStick();
     pad.classList.add('off');
     overlayTitle.textContent = 'ゲームオーバー';
     overlayText.innerHTML = `スコア ${state.score}（STAGE ${state.level + 1}）<br>ハイスコア ${state.hi}`;
