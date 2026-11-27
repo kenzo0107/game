@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c2470"/>
+      <stop offset="1" stop-color="#161433"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="180" fill="url(#bg)"/>
+  <rect x="100" y="8" width="120" height="166" rx="6" fill="#0d0c24" stroke="#7d6bff" stroke-width="3"/>
+  <g stroke="#0d0c24" stroke-width="2">
+    <g fill="#b46bff">
+      <rect x="136" y="26" width="16" height="16" rx="3"/>
+      <rect x="120" y="42" width="16" height="16" rx="3"/>
+      <rect x="136" y="42" width="16" height="16" rx="3"/>
+      <rect x="152" y="42" width="16" height="16" rx="3"/>
+    </g>
+    <g fill="#4dd8ff">
+      <rect x="104" y="106" width="16" height="16" rx="3"/>
+      <rect x="104" y="122" width="16" height="16" rx="3"/>
+      <rect x="104" y="138" width="16" height="16" rx="3"/>
+      <rect x="104" y="154" width="16" height="16" rx="3"/>
+    </g>
+    <g fill="#ffd23f">
+      <rect x="120" y="138" width="16" height="16" rx="3"/>
+      <rect x="136" y="138" width="16" height="16" rx="3"/>
+      <rect x="120" y="154" width="16" height="16" rx="3"/>
+      <rect x="136" y="154" width="16" height="16" rx="3"/>
+    </g>
+    <g fill="#ff5a6a">
+      <rect x="152" y="138" width="16" height="16" rx="3"/>
+      <rect x="168" y="138" width="16" height="16" rx="3"/>
+      <rect x="168" y="154" width="16" height="16" rx="3"/>
+      <rect x="184" y="154" width="16" height="16" rx="3"/>
+    </g>
+    <g fill="#5ee06a">
+      <rect x="184" y="122" width="16" height="16" rx="3"/>
+      <rect x="200" y="122" width="16" height="16" rx="3"/>
+      <rect x="184" y="138" width="16" height="16" rx="3"/>
+      <rect x="200" y="138" width="16" height="16" rx="3"/>
+    </g>
+    <g fill="#ff9d3a">
+      <rect x="152" y="154" width="16" height="16" rx="3"/>
+      <rect x="200" y="154" width="16" height="16" rx="3"/>
+    </g>
+  </g>
+  <g fill="none" stroke="#b46bff" stroke-width="2" opacity=".5">
+    <rect x="122" y="108" width="12" height="12"/>
+    <rect x="138" y="108" width="12" height="12"/>
+    <rect x="154" y="108" width="12" height="12"/>
+    <rect x="138" y="92" width="12" height="12"/>
+  </g>
+  <g fill="#1a1033">
+    <circle cx="141" cy="34" r="1.6"/>
+    <circle cx="147" cy="34" r="1.6"/>
+  </g>
+  <text x="40" y="96" fill="#ffd23f" font-family="sans-serif" font-size="30" font-weight="900" text-anchor="middle">↓</text>
+  <text x="280" y="96" fill="#ffd23f" font-family="sans-serif" font-size="30" font-weight="900" text-anchor="middle">↻</text>
+</svg>
