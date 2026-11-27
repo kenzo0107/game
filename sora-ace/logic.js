@@ -141,8 +141,8 @@ export const HOME_MAX = 200;
 
 export const shiftHome = (home, x, speed, dt) => Math.max(HOME_MIN, Math.min(HOME_MAX, home + x * speed * dt));
 
-export function loopOffset(turned, start, radius) {
-    const ox = radius * Math.sin(turned);
+export function loopOffset(turned, start, radius, back = 0) {
+    const ox = radius * Math.sin(turned) - (back * turned) / (Math.PI * 2);
     const oy = -radius * (1 - Math.cos(turned));
     return {
         x: ox * Math.cos(start) - oy * Math.sin(start),
@@ -178,6 +178,18 @@ export function bounceStep({ y, vy }, floor, dt) {
 
 export function bombHitsFort(bomb, fortX) {
     return Math.abs(bomb.x - fortX) <= 34;
+}
+
+export const BASE_SHOTS = 5;
+export const MAX_SHOTS_CAP = 12;
+const BASE_SHOT_SEC = 0.13;
+const MIN_SHOT_SEC = 0.06;
+
+export function shotPower(hitCount) {
+    return {
+        max: Math.min(MAX_SHOTS_CAP, BASE_SHOTS + hitCount),
+        interval: Math.max(MIN_SHOT_SEC, BASE_SHOT_SEC - hitCount * 0.01),
+    };
 }
 
 export const SCORES = {

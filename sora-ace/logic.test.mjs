@@ -12,6 +12,9 @@ import {
     canLand,
     clampPitch,
     loopOffset,
+    BASE_SHOTS,
+    MAX_SHOTS_CAP,
+    shotPower,
     MAX_PITCH,
     groundY,
     HOME_MAX,
@@ -168,4 +171,22 @@ test('スティックを真横近くに倒したときは、縦の入力にな�
     const v = stickVector(60, 6, 60);
     assert.equal(v.y, 0);
     assert.ok(v.x > 0.9);
+});
+
+test('宙返りは、始めた位置より少し後ろで終わる', () => {
+    for (const start of [0, -MAX_PITCH, MAX_PITCH]) {
+        const end = loopOffset(Math.PI * 2, start, 16, 24);
+        assert.ok(Math.abs(Math.hypot(end.x, end.y) - 24) < 1e-9);
+        assert.ok(end.x < -16);
+    }
+});
+
+test('弾を当てるたびに、一度に撃てる弾が増えて連射が速くなり、上限で止まる', () => {
+    assert.equal(shotPower(0).max, BASE_SHOTS);
+    for (let n = 0; n < MAX_SHOTS_CAP - BASE_SHOTS; n++) {
+        assert.ok(shotPower(n + 1).max > shotPower(n).max);
+        assert.ok(shotPower(n + 1).interval < shotPower(n).interval);
+    }
+    assert.equal(shotPower(100).max, MAX_SHOTS_CAP);
+    assert.ok(shotPower(100).interval > 0);
 });

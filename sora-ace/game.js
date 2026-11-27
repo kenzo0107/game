@@ -22,6 +22,7 @@ import {
     loopOffset,
     normalizeAngle,
     shiftHome,
+    shotPower,
     stickVector,
     themeOf,
 } from './logic.js';
@@ -35,9 +36,8 @@ const HOME_SHIFT = 90;
 const HOME_PULL = 0.6;
 const LOOP_SEC = 0.4;
 const LOOP_RADIUS = 16;
+const LOOP_BACK = 24;
 const SHOT_SPEED = 190;
-const SHOT_SEC = 0.13;
-const MAX_SHOTS = 5;
 const BOMB_GRAVITY = 90;
 const SPIN_GRAVITY = 55;
 const RESPAWN_SEC = 2;
@@ -68,6 +68,7 @@ const soundButton = document.getElementById('sound');
 const scoreEl = document.getElementById('score');
 const hiEl = document.getElementById('hi');
 const stageEl = document.getElementById('stage-no');
+const powerEl = document.getElementById('power');
 const livesEl = document.getElementById('lives');
 const bombBox = document.getElementById('bomb-box');
 const bombButton = document.getElementById('bomb-button');
@@ -108,6 +109,7 @@ const state = {
     enemies: [],
     guns: [],
     crates: [],
+    hitCount: 0,
     fort: { x: 0, alive: true },
     shots: [],
     eshots: [],
@@ -341,6 +343,7 @@ function startGame() {
     state.score = 0;
     state.lives = START_LIVES;
     state.nextExtend = EXTEND_EVERY;
+    state.hitCount = 0;
     overlay.hidden = true;
     releaseStick();
     pad.classList.remove('off');
@@ -384,6 +387,7 @@ function renderHud() {
     scoreEl.textContent = state.score;
     hiEl.textContent = state.hi;
     stageEl.textContent = state.level + 1;
+    powerEl.textContent = shotPower(state.hitCount).max;
     livesEl.textContent = '✈'.repeat(Math.max(0, state.lives - 1));
     const hasBomb = Boolean(state.player?.hasBomb);
     bombBox.hidden = !hasBomb;
@@ -398,6 +402,11 @@ function renderSound() {
 const screenX = (x) => x - state.cam;
 const onScreen = (x, margin = 0) => screenX(x) > -margin && screenX(x) < VIEW.w + margin;
 const difficulty = () => Math.min(state.level, MAX_LEVEL_STEP);
+
+function powerUp() {
+    state.hitCount++;
+    renderHud();
+}
 
 function hitPlayer() {
     const p = state.player;
@@ -465,6 +474,7 @@ function updatePlayer(dt) {
         if (p.t < RESPAWN_SEC) return;
         if (state.lives <= 0) return gameOver();
         state.player = newPlayer(state.cam + HOME_X, 60);
+        state.hitCount = 0;
         renderHud();
         return;
     }
@@ -533,13 +543,14 @@ function updatePlayer(dt) {
     if (p.mode === 'loop') {
         p.loopT = Math.min(p.loopT + dt, LOOP_SEC);
         const turned = (Math.PI * 2 * p.loopT) / LOOP_SEC;
-        const offset = loopOffset(turned, p.loopStart, LOOP_RADIUS);
+        const offset = loopOffset(turned, p.loopStart, LOOP_RADIUS, LOOP_BACK);
         p.a = p.loopStart - turned;
         p.x = state.cam + p.loopOrigin.sx + offset.x;
         p.y = Math.max(CEILING_Y, p.loopOrigin.y + offset.y);
         if (p.loopT >= LOOP_SEC) {
             p.mode = 'fly';
             p.a = p.loopStart;
+            p.home = shiftHome(p.home, -1, LOOP_BACK, 1);
         }
     } else {
         const input = steerInput();
@@ -555,8 +566,9 @@ function updatePlayer(dt) {
     }
     p.x = Math.max(state.cam + 12, p.x);
 
-    if (held.fire && p.fireCD <= 0 && state.shots.length < MAX_SHOTS) {
-        p.fireCD = SHOT_SEC;
+    const power = shotPower(state.hitCount);
+    if (held.fire && p.fireCD <= 0 && state.shots.length < power.max) {
+        p.fireCD = power.interval;
         state.shots.push({
             x: p.x + Math.cos(p.a) * 9,
             y: p.y + Math.sin(p.a) * 9,
@@ -650,12 +662,14 @@ function updateShots(dt) {
         for (const e of state.enemies) {
             if (!e.dead && s.t > 0 && hits(s, e, 8)) {
                 destroy(e, e.kind);
+                powerUp();
                 s.t = 0;
             }
         }
         for (const gun of state.guns) {
             if (gun.alive && s.t > 0 && hits(s, { x: gun.x, y: gun.y - 4 }, 8)) {
                 destroy(gun, 'gun');
+                powerUp();
                 s.t = 0;
             }
         }
