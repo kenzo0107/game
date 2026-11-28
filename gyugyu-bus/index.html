@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#2b3a4a">
+    <title>ぎゅうぎゅうバス</title>
+    <script src="../shared/audio-session.js"></script>
+    <script src="../shared/no-zoom.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="hud">
+        <div><span class="label">STAGE</span><b id="stage">1</b></div>
+        <div><span class="label">SCORE</span><b id="score">0</b></div>
+        <div><span class="label">のこり</span><b id="left">0</b><small>にん</small></div>
+        <button type="button" id="retry" class="icon" aria-label="やりなおし">↺</button>
+        <button type="button" id="pause" class="icon" aria-label="いちじていし">⏸</button>
+        <button type="button" id="sound" class="icon" aria-pressed="true" aria-label="おと">♪</button>
+    </header>
+
+    <main class="play" id="play">
+        <div class="field">
+            <canvas id="board"></canvas>
+            <div class="toast" id="toast" aria-live="polite"></div>
+        </div>
+    </main>
+
+    <div class="overlay" id="overlay">
+        <div class="panel">
+            <h1 id="overlay-title">ぎゅうぎゅうバス</h1>
+            <p id="overlay-text">
+                ちゅうしゃじょうの <b>バスを タップ</b>して<br>
+                のりばへ だそう。<br>
+                おきゃくさんは ぐるぐる あるいて、<br>
+                おなじ いろの バスの まえで のるよ。<br>
+                まんいんに なったら しゅっぱつ！<br>
+                <small>のりばが うまって だれも のれなくなったら おしまい。</small>
+            </p>
+            <p class="howto">バスは やじるしの むきにしか すすめないよ。<br>つづけて しゅっぱつさせると ノリノリ ボーナス！<br>こまったら ＋で のりばを 1つ ふやせるよ</p>
+            <button type="button" id="start" class="primary">あそぶ</button>
+        </div>
+    </div>
+
+    <script type="module" src="game.js"></script>
+</body>
+</html>

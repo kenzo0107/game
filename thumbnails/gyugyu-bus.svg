@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">
+  <defs>
+    <g id="person">
+      <rect x="-4" y="-2" width="8" height="8" rx="3" fill="currentColor"/>
+      <circle cy="-5" r="3.2" fill="#ffe0c2"/>
+    </g>
+    <path id="arrow" d="M0 -7 L6 0 L2.4 0 L2.4 6 L-2.4 6 L-2.4 0 L-6 0 Z" fill="#fff" fill-opacity="0.92"/>
+  </defs>
+  <rect width="320" height="180" fill="#7fb069"/>
+  <rect x="8" y="6" width="304" height="30" rx="8" fill="#d9d2bd"/>
+  <g transform="translate(0 22)">
+    <use href="#person" x="24" color="#ef4b4b"/>
+    <use href="#person" x="40" color="#ef4b4b"/>
+    <use href="#person" x="56" color="#3d8bff"/>
+    <use href="#person" x="72" color="#ffc928"/>
+    <use href="#person" x="88" color="#ef4b4b"/>
+    <use href="#person" x="104" color="#3cc469"/>
+    <use href="#person" x="120" color="#3d8bff"/>
+    <use href="#person" x="136" color="#3d8bff"/>
+    <use href="#person" x="152" color="#ffc928"/>
+    <use href="#person" x="168" color="#3cc469"/>
+    <use href="#person" x="184" color="#ef4b4b"/>
+    <use href="#person" x="200" color="#ffc928"/>
+    <use href="#person" x="216" color="#3cc469"/>
+    <use href="#person" x="232" color="#3d8bff"/>
+    <use href="#person" x="248" color="#ef4b4b"/>
+    <use href="#person" x="264" color="#3cc469"/>
+    <use href="#person" x="280" color="#ffc928"/>
+    <use href="#person" x="296" color="#3d8bff"/>
+  </g>
+
+  <rect y="40" width="320" height="52" fill="#4a5560"/>
+  <g stroke="#f4f1e6" stroke-width="2">
+    <line x1="64" y1="42" x2="64" y2="84"/><line x1="128" y1="42" x2="128" y2="84"/>
+    <line x1="192" y1="42" x2="192" y2="84"/><line x1="256" y1="42" x2="256" y2="84"/>
+  </g>
+  <g>
+    <rect x="16" y="44" width="32" height="40" rx="8" fill="#a82828"/>
+    <rect x="19" y="46" width="26" height="36" rx="6" fill="#ef4b4b"/>
+    <rect x="21" y="48" width="22" height="8" rx="3" fill="#cdeeff"/>
+    <g fill="#ffe0c2"><circle cx="26" cy="64" r="3.5"/><circle cx="38" cy="64" r="3.5"/><circle cx="26" cy="75" r="3.5"/></g>
+    <rect x="80" y="44" width="32" height="40" rx="8" fill="#1f56b8"/>
+    <rect x="83" y="46" width="26" height="36" rx="6" fill="#3d8bff"/>
+    <rect x="85" y="48" width="22" height="8" rx="3" fill="#cdeeff"/>
+    <g fill="#ffe0c2"><circle cx="90" cy="64" r="3.5"/></g>
+    <rect x="144" y="44" width="32" height="40" rx="8" fill="#b88a00"/>
+    <rect x="147" y="46" width="26" height="36" rx="6" fill="#ffc928"/>
+    <rect x="149" y="48" width="22" height="8" rx="3" fill="#cdeeff"/>
+    <g fill="#ffe0c2"><circle cx="154" cy="64" r="3.5"/><circle cx="166" cy="64" r="3.5"/></g>
+  </g>
+  <g fill="#ffcf3f"><rect x="8" y="88" width="14" height="2"/><rect x="40" y="88" width="14" height="2"/><rect x="72" y="88" width="14" height="2"/><rect x="104" y="88" width="14" height="2"/><rect x="136" y="88" width="14" height="2"/><rect x="168" y="88" width="14" height="2"/><rect x="200" y="88" width="14" height="2"/><rect x="232" y="88" width="14" height="2"/><rect x="264" y="88" width="14" height="2"/><rect x="296" y="88" width="14" height="2"/></g>
+
+  <rect x="6" y="96" width="308" height="82" rx="8" fill="#5b6670"/>
+  <g>
+    <rect x="14" y="102" width="70" height="24" rx="7" fill="#1f8040"/>
+    <rect x="17" y="104" width="64" height="20" rx="6" fill="#3cc469"/>
+    <rect x="19" y="106" width="8" height="16" rx="3" fill="#cdeeff"/>
+    <use href="#arrow" transform="translate(52 114) rotate(-90)"/>
+
+    <rect x="92" y="102" width="24" height="70" rx="7" fill="#a82828"/>
+    <rect x="94" y="105" width="20" height="64" rx="6" fill="#ef4b4b"/>
+    <rect x="96" y="107" width="16" height="8" rx="3" fill="#cdeeff"/>
+    <use href="#arrow" transform="translate(104 138)"/>
+
+    <rect x="124" y="134" width="96" height="24" rx="7" fill="#1f56b8"/>
+    <rect x="127" y="136" width="90" height="20" rx="6" fill="#3d8bff"/>
+    <rect x="207" y="138" width="8" height="16" rx="3" fill="#cdeeff"/>
+    <use href="#arrow" transform="translate(170 146) rotate(90)"/>
+
+    <rect x="14" y="134" width="70" height="24" rx="7" fill="#b88a00"/>
+    <rect x="17" y="136" width="64" height="20" rx="6" fill="#ffc928"/>
+    <rect x="71" y="138" width="8" height="16" rx="3" fill="#cdeeff"/>
+    <use href="#arrow" transform="translate(46 146) rotate(90)"/>
+
+    <rect x="228" y="102" width="24" height="70" rx="7" fill="#1f8040"/>
+    <rect x="230" y="105" width="20" height="64" rx="6" fill="#3cc469"/>
+    <rect x="232" y="159" width="16" height="8" rx="3" fill="#cdeeff"/>
+    <use href="#arrow" transform="translate(240 136) rotate(180)"/>
+
+    <rect x="124" y="102" width="96" height="24" rx="7" fill="#b88a00"/>
+    <rect x="127" y="104" width="90" height="20" rx="6" fill="#ffc928"/>
+    <rect x="129" y="106" width="8" height="16" rx="3" fill="#cdeeff"/>
+    <use href="#arrow" transform="translate(172 114) rotate(-90)"/>
+
+    <rect x="260" y="102" width="46" height="24" rx="7" fill="#a82828"/>
+    <rect x="263" y="104" width="40" height="20" rx="6" fill="#ef4b4b"/>
+    <rect x="293" y="106" width="8" height="16" rx="3" fill="#cdeeff"/>
+    <use href="#arrow" transform="translate(280 114) rotate(90)"/>
+  </g>
+  <text x="286" y="72" font-family="sans-serif" font-weight="900" font-size="18" fill="#ffd84a" stroke="#000" stroke-width="1" text-anchor="end">プップー!</text>
+</svg>
